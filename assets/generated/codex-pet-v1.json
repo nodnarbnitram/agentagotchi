@@ -1,0 +1,49 @@
+{
+  "name": "Codex Pet v1",
+  "version": 1,
+  "sheet": {
+    "width": 1536,
+    "height": 1872,
+    "columns": 8,
+    "rows": 13,
+    "cellWidth": 192,
+    "cellHeight": 144,
+    "frameDurationMs": 100,
+    "rowNames": [
+      "idle",
+      "run_right",
+      "run_left",
+      "wave",
+      "jump",
+      "failed",
+      "waiting",
+      "running",
+      "ready",
+      "celebrate",
+      "blocked",
+      "sleep",
+      "needs_input"
+    ],
+    "pixelArt": true,
+    "transparent": true
+  },
+  "device": {
+    "format": "CPET RGB565 little-endian",
+    "width": 192,
+    "height": 144,
+    "backgroundRgb": [
+      11,
+      21,
+      27
+    ],
+    "states": [
+      "idle",
+      "running",
+      "needs_input",
+      "ready",
+      "blocked"
+    ],
+    "framesPerState": 8,
+    "stateOrderMatchesFirmwareEnum": true
+  }
+}

@@ -1,0 +1,17 @@
+menu "Codex Pet"
+
+config CODEX_PET_SENSOR_BAR
+    bool "Enable SENSOR dock status bar"
+    default y
+    help
+        Enable AHT30 temperature/humidity, GPIO10 battery estimation,
+        and GPIO21 radar presence in the top status bar.
+
+config CODEX_PET_LOG_SENSOR_DIAGNOSTICS
+    bool "Log sensor diagnostics"
+    default n
+    help
+        Log local sensor values over serial. Sensor values never travel
+        to the Mac bridge.
+
+endmenu

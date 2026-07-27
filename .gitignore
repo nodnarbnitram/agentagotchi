@@ -1,0 +1,10 @@
+/work/
+/firmware/build/
+/firmware/.cache/
+/firmware/managed_components/
+/firmware/sdkconfig
+.env
+__pycache__/
+*.py[cod]
+.DS_Store
+*.log
