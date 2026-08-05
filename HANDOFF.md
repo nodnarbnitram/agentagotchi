@@ -1,4 +1,4 @@
-# Agent Pet multi-harness and remote-presence rebuild
+# Agentagotchi multi-harness and remote-presence rebuild
 
 Approved implementation brief. Rebuild the current prototype in place around
 machine-local Edge Bridges, an optional remote Home Bridge, and devices that can
@@ -8,9 +8,8 @@ The existing code, protocol, and Codex-only handoff are reference material, not
 compatibility constraints. Git history is the rollback path. Prefer a coherent
 replacement over adapters around accidental prototype boundaries.
 
-`Agent Pet` is the working product name. Rename Codex-specific project, binary,
-package, UI, and protocol terminology as part of the rebuild; choosing the final
-brand is not a blocker.
+`Agentagotchi` is the product name. Rename Codex-specific project, binary,
+package, UI, and protocol terminology as part of the rebuild.
 
 ## Required scenarios
 
@@ -106,12 +105,15 @@ than one relay hop.
 
 ### Pairing
 
-Use one short-lived device-code authorization state machine for all relationship
-types, with role-specific grants:
+Use one short-lived device-code authorization state machine — the **Pairing
+Ceremony** — for all relationship types, with role-specific grants:
 
-- the connecting peer requests a short-lived code;
-- the code is displayed to the user;
-- the user approves it in an authenticated Edge or Home administration client;
+- the connecting client requests a short-lived code from the receiving
+  service;
+- the connecting client displays the code to the user (BOX-3 screen, Edge
+  CLI);
+- the user approves it in the receiving service's authenticated
+  administration client (Edge CLI/app, or the Home web UI);
 - successful approval issues a unique, random, revocable credential scoped to
   that relationship and role;
 - the client pins/authenticates the receiving service identity;
@@ -297,8 +299,12 @@ When an owner lease expires:
 
 - remove transient `running` and `needs_input` presences after a short grace
   period;
-- retain already-terminal `ready` and `blocked` notifications under the normal
-  acknowledgement/retention policy;
+- retain already-terminal `ready` and `blocked` notifications under the
+  acknowledgement/retention policy: keep until acknowledged, bounded by a
+  7-day TTL measured in monotonic time (configurable per Edge) and a per-Edge
+  FIFO bound of ~200 terminal presences with oldest evicted first. Expiry
+  removes the presence exactly like acknowledgement — it never rewrites it to
+  `completed` or `failed` — and is visible in administration diagnostics;
 - never convert a disconnect into `completed` or `failed`;
 - show bridge/adapter liveness separately in administration UI, not as a pet
   task state.
@@ -333,6 +339,25 @@ Acknowledgement is global at the origin Edge. After an exact successful action,
 the Edge records the acknowledgement and publishes a new presence revision so
 all direct feeds, Home, web UI, and devices converge.
 
+### Dismissal controls
+
+Two Edge-local control messages manage attention without touching a harness.
+Both are always available for any Task Presence, are deduplicated by ID like
+actions, and never dispatch to a Harness Adapter capability:
+
+- **Acknowledge** dismisses a terminal (`ready`/`blocked`) Task Presence: the
+  owning Edge removes it from every Presence Feed. It resurfaces only if the
+  Harness Session later leaves and re-enters a terminal state. An exact
+  successful Device Capability action on a terminal target (for example
+  Focus) also acknowledges it.
+- **Snooze** sets aside an input-gated (`needs_input`) Task Presence without
+  approving, denying, or answering: it stays in every feed and task list but
+  stops claiming the Featured Task until its state or reason next changes. No
+  time-based resurface. Accepted v1 limitation: an identical back-to-back
+  gate on a snoozed task produces no state or reason change and stays
+  snoozed; an adapter-provided opaque attention-epoch counter is the designed
+  fix if real usage requires it.
+
 ### Focus
 
 Focus is optional. A local Codex adapter may support exact thread focus; a VPS Pi
@@ -353,6 +378,9 @@ safe title.
 - Tapping a row makes that Task Presence the **Featured Task** on BOX-3 only.
 - Tapping the featured pet invokes Focus only when advertised.
 - Browsing never causes a host-side action.
+- An explicit dismiss gesture acknowledges a terminal row and snoozes an
+  input-gated row. The exact affordance is a firmware interaction decision;
+  browsing and row taps alone never dismiss anything.
 - Main title, reason, state, and action target all come from the same Featured
   Task.
 
@@ -372,6 +400,9 @@ updates within the same state do not change queue position.
 - When the Featured Task resolves/leaves its rank, feature the oldest remaining
   task at the highest rank.
 - Manual row selection temporarily overrides automatic selection.
+- A Snoozed Task Presence keeps its rank and queue position but is skipped by
+  automatic Featuring until its snooze ends; it can still be featured by
+  manual selection.
 - The priority queue reclaims the main pet when new urgency arrives according
   to the rules above; manual browsing must not permanently hide new work.
 
@@ -416,9 +447,12 @@ guessed behavior as fact.
 
 ## Implementation order
 
+Phases are dependency order, not release gates: the rebuild ships as one
+release.
+
 ### Phase 1 — successor foundation
 
-1. Adopt the Agent Pet domain language and rename Codex-specific project
+1. Adopt the Agentagotchi domain language and rename Codex-specific project
    surfaces where they no longer describe the product.
 2. Replace the protocol document with role-separated contracts for local adapter
    IPC, Edge upstream, device feeds, pairing, actions, and administration.
@@ -509,7 +543,8 @@ Do not skip semantic/privacy tests to start UI or remote networking early.
 - Duplicate Task Presence IDs converge by origin revision.
 - Disconnect removes only the lost feed's contribution.
 - Four simultaneous TLS/WSS feeds meet measured memory/stability/power budgets.
-- Task list scrolling, selection, FIFO priority, and preemption work on hardware.
+- Task list scrolling, selection, FIFO priority, preemption, and
+  dismiss/snooze gestures work on hardware.
 
 ### Actions
 
@@ -520,6 +555,9 @@ Do not skip semantic/privacy tests to start UI or remote networking early.
 - Duplicate action IDs execute at most once.
 - Acknowledgement occurs only after exact success and converges globally.
 - Status-only Pi tasks remain browsable without advertising Focus.
+- Acknowledge removes a terminal presence globally; snooze suppresses
+  automatic Featuring until a state or reason change; neither mutates the
+  harness.
 
 ### End-to-end acceptance
 
@@ -542,7 +580,8 @@ Do not skip semantic/privacy tests to start UI or remote networking early.
 - Edge-to-Edge or Home-to-Home relaying
 - Local Feed Gateway/election unless four-feed hardware profiling fails
 - Multi-tenant Home hosting
-- Per-device acknowledgement state
+- Per-device acknowledgement or snooze state (dismissal is Edge-global)
+- Time-based snooze resurface (nagging) and adapter attention-epoch counters
 - Legacy prototype protocol/runtime compatibility
 
 ## Likely repository shape
@@ -596,5 +635,7 @@ Do not install, flash, or provision without explicit user authorization.
 - Actions route only to exact advertised origin capabilities, are never queued,
   and acknowledge globally only after success.
 - Disconnects cannot leave transient tasks running forever.
+- Dismissal (acknowledge/snooze) is Edge-global, episode-scoped, and never
+  mutates a harness.
 - Claude, additional controls, STT, pet customization, mesh/gateway routing, and
   multi-tenancy remain deferred rather than leaking into the rebuild.

@@ -186,7 +186,7 @@ static void discover_bridge(char *host, size_t host_capacity, int *port)
 {
     mdns_result_t *results = NULL;
     if (mdns_init() != ESP_OK ||
-        mdns_query_ptr("_codex-pet", "_tcp", 2500, 4, &results) != ESP_OK) {
+        mdns_query_ptr("_agentagotchi", "_tcp", 2500, 4, &results) != ESP_OK) {
         return;
     }
     for (mdns_result_t *result = results; result != NULL; result = result->next) {

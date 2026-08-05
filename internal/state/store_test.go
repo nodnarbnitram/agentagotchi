@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"codexpet.local/codex-pet/internal/model"
+	"agentagotchi.local/agentagotchi/internal/model"
 )
 
 func event(id, name string, at int64) model.HookEvent {

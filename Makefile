@@ -22,7 +22,7 @@ assets: $(VENV_STAMP)
 build-host:
 	mkdir -p work/bin work/gocache
 	GOCACHE="$(CURDIR)/work/gocache" GOOS=darwin GOARCH=arm64 \
-		$(GO) build -trimpath -o work/bin/codex-pet ./cmd/codex-pet
+		$(GO) build -trimpath -o work/bin/agentagotchi ./cmd/agentagotchi
 
 provision-env: build-host
 	scripts/provision-from-env.sh
@@ -43,7 +43,7 @@ plugin-validate: $(VENV_STAMP)
 		echo "Install/use Codex plugin-creator or set PLUGIN_VALIDATOR." >&2; \
 		exit 1; \
 	}
-	"$(VENV_PYTHON)" "$(PLUGIN_VALIDATOR)" plugin/codex-pet-status
+	"$(VENV_PYTHON)" "$(PLUGIN_VALIDATOR)" plugin/agentagotchi-status
 
 test: assets firmware-test
 	mkdir -p work/gocache

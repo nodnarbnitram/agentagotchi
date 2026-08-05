@@ -1,6 +1,6 @@
-# Codex Pet for ESP32-S3-BOX-3
+# Agentagotchi for ESP32-S3-BOX-3
 
-Codex Pet turns one ESP32-S3-BOX-3 plus the SENSOR dock into a local status
+Agentagotchi turns one ESP32-S3-BOX-3 plus the SENSOR dock into a local status
 companion for Codex. It shows the highest-priority task, aggregate task counts,
 subagent count, and a large animated pet with a desktop-style speech bubble.
 The bubble measures each message, expands to nearly the full display width,
@@ -11,10 +11,10 @@ putting sensor work on the LVGL task.
 
 The implementation has three pieces:
 
-- `codex-pet serve`: an arm64 macOS launch agent that reduces privacy-filtered
+- `agentagotchi serve`: an arm64 macOS launch agent that reduces privacy-filtered
   Codex hook events, reads task metadata from a read-only Codex App Server
   subprocess, and serves an authenticated certificate-pinned WSS connection.
-- `codex-pet hook`: the hook receiver. It discards prompts, commands, tool
+- `agentagotchi hook`: the hook receiver. It discards prompts, commands, tool
   input/output, transcripts, assistant output, and full paths before emitting
   an event.
 - ESP-IDF firmware: independent networking, sensor, audio, and LVGL work queues
@@ -50,7 +50,7 @@ and
 
 - macOS on Apple silicon with Go 1.22 or newer.
 - The Codex desktop app installed in `/Applications/ChatGPT.app` or
-  `/Applications/Codex.app`; set `CODEX_PET_CODEX_BIN` for a custom location.
+  `/Applications/Codex.app`; set `AGENTAGOTCHI_CODEX_BIN` for a custom location.
 - [ESP-IDF 5.5.5](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/get-started/index.html)
   activated when building or flashing firmware.
 - Python 3 with `venv` support. `make test` installs the pinned Pillow and
@@ -91,8 +91,8 @@ make assets
 ```
 
 The transparent desktop sprite sheet is
-`assets/generated/codex-pet-v1.png` (1536×1872, 8 columns × 13 rows). Its
-documented row map is in `assets/generated/codex-pet-v1.json`. The same build
+`assets/generated/agentagotchi-v1.png` (1536×1872, 8 columns × 13 rows). Its
+documented row map is in `assets/generated/agentagotchi-v1.json`. The same build
 produces the native-cell 192×144, five-state, eight-frame RGB565 firmware
 binary, keeping the BOX-3 pet the same pixel scale as the desktop sheet.
 The pet artwork is original to this project; `assets/source/pet_base.png` is
@@ -105,11 +105,11 @@ scripts/install-macos.sh
 ```
 
 This builds an arm64 binary, installs it under
-`~/Library/Application Support/CodexPet`, copies the local hook plugin to
-`~/plugins/codex-pet-status`, and loads `com.openai.codexpet` as a LaunchAgent.
+`~/Library/Application Support/Agentagotchi`, copies the local hook plugin to
+`~/plugins/agentagotchi-status`, and loads `com.agentagotchi.edge` as a LaunchAgent.
 It also asks Codex to enable the personal plugin and stops with a clear error if
 that step is unavailable. Restart Codex after installing or updating hooks, then
-open `/hooks` and trust all nine Codex Pet hooks. Installed and enabled hooks do
+open `/hooks` and trust all nine Agentagotchi hooks. Installed and enabled hooks do
 not run until their exact definitions have been trusted. If Codex was already
 open while trust was granted from the CLI, quit and reopen the desktop app once.
 
@@ -144,16 +144,16 @@ make provision-env
 
 The script reads only `WIFI_SSID` and `WIFI_PASSWORD`, sends the password over
 stdin, and reports success only after the BOX acknowledges that it saved the
-record. It never prints the credentials. Set `CODEX_PET_SERIAL` if more than
-one serial device is connected, and set `CODEX_PET_TEMP_UNIT=C` to use Celsius.
+record. It never prints the credentials. Set `AGENTAGOTCHI_SERIAL` if more than
+one serial device is connected, and set `AGENTAGOTCHI_TEMP_UNIT=C` to use Celsius.
 
-The direct `codex-pet provision` command can also flash and provision in one
+The direct `agentagotchi provision` command can also flash and provision in one
 step when ESP-IDF 5.5.5 is activated. `make provision-env` intentionally uses
 `--skip-flash` so rebuilding the Mac helper cannot overwrite a known-good
 device image. An already configured v1 device must have its NVS erased before
 changing its stored configuration.
 
-Bonjour advertises `_codex-pet._tcp`. The stored hostname and port remain the
+Bonjour advertises `_agentagotchi._tcp`. The stored hostname and port remain the
 manual fallback. The Mac must be awake and both devices must be on the same
 trusted LAN.
 

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PetAssetTests(unittest.TestCase):
     def test_documented_sheet_shape_and_alpha(self) -> None:
-        sheet = Image.open(ROOT / "assets/generated/codex-pet-v1.png")
+        sheet = Image.open(ROOT / "assets/generated/agentagotchi-v1.png")
         self.assertEqual(sheet.size, (1536, 1872))
         self.assertEqual(sheet.mode, "RGBA")
         alpha = sheet.getchannel("A")
@@ -45,7 +45,7 @@ class PetAssetTests(unittest.TestCase):
         magic, version, width, height, states, frames, offset = struct.unpack(
             "<4sHHHBBI", data[:16]
         )
-        self.assertEqual(magic, b"CPET")
+        self.assertEqual(magic, b"AGOT")
         self.assertEqual(version, 1)
         self.assertEqual((width, height, states, frames, offset), (192, 144, 5, 8, 16))
         self.assertEqual(len(data), 16 + width * height * states * frames * 2)
@@ -55,7 +55,7 @@ class PetAssetTests(unittest.TestCase):
 
     def test_metadata_matches_sheet(self) -> None:
         metadata = json.loads(
-            (ROOT / "assets/generated/codex-pet-v1.json").read_text(encoding="utf-8")
+            (ROOT / "assets/generated/agentagotchi-v1.json").read_text(encoding="utf-8")
         )
         self.assertEqual(
             metadata["sheet"],
@@ -115,7 +115,7 @@ class PetAssetTests(unittest.TestCase):
             "logo-dark.png": ((512, 512), (255, 255)),
         }
         for name, (size, alpha_extrema) in expected.items():
-            image = Image.open(ROOT / "plugin/codex-pet-status/assets" / name)
+            image = Image.open(ROOT / "plugin/agentagotchi-status/assets" / name)
             self.assertEqual(image.size, size)
             self.assertEqual(image.mode, "RGBA")
             self.assertEqual(image.getchannel("A").getextrema(), alpha_extrema)

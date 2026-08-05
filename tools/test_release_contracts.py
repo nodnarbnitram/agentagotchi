@@ -52,9 +52,9 @@ class ReleaseContractTests(unittest.TestCase):
 
         self.assertRegex(
             kconfig,
-            r"config CODEX_PET_SENSOR_BAR\s+bool .*?\s+default y",
+            r"config AGENTAGOTCHI_SENSOR_BAR\s+bool .*?\s+default y",
         )
-        self.assertIn("CONFIG_CODEX_PET_SENSOR_BAR=y", defaults)
+        self.assertIn("CONFIG_AGENTAGOTCHI_SENSOR_BAR=y", defaults)
         self.assertIn("CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192", defaults)
         self.assertIn("CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y", defaults)
         self.assertIn("static app_ui_event_t event", main)
@@ -111,11 +111,11 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertIn("MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT", source)
 
     def test_launch_agent_contract(self) -> None:
-        template = (ROOT / "packaging/com.openai.codexpet.plist.in").read_text(
+        template = (ROOT / "packaging/com.agentagotchi.edge.plist.in").read_text(
             encoding="utf-8"
         )
         parsed = plistlib.loads(template.encode("utf-8"))
-        self.assertEqual(parsed["Label"], "com.openai.codexpet")
+        self.assertEqual(parsed["Label"], "com.agentagotchi.edge")
         self.assertTrue(parsed["RunAtLoad"])
         self.assertTrue(parsed["KeepAlive"])
         self.assertEqual(parsed["ProgramArguments"][1], "serve")

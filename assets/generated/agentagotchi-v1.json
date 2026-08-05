@@ -1,5 +1,5 @@
 {
-  "name": "Codex Pet v1",
+  "name": "Agentagotchi v1",
   "version": 1,
   "sheet": {
     "width": 1536,
@@ -28,7 +28,7 @@
     "transparent": true
   },
   "device": {
-    "format": "CPET RGB565 little-endian",
+    "format": "AGOT RGB565 little-endian",
     "width": 192,
     "height": 144,
     "backgroundRgb": [

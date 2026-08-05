@@ -324,7 +324,7 @@ static void apply_snapshot(const app_snapshot_t *snapshot)
     }
 }
 
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
 static void set_label_if_changed(lv_obj_t *label, char *cached, size_t capacity, const char *value)
 {
     if (strncmp(cached, value, capacity) == 0) {
@@ -354,7 +354,7 @@ static int wifi_bar_count(void)
 
 static void update_status_bar(void)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
     int bars = wifi_bar_count();
     if (bars != s_ui.rendered_wifi_bars) {
         for (int i = 0; i < 4; ++i) {
@@ -547,7 +547,7 @@ static void ui_timer_handler(lv_timer_t *timer)
 
 static void build_status_bar(lv_obj_t *screen)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
     s_ui.status_bar = lv_obj_create(screen);
     lv_obj_set_pos(s_ui.status_bar, 0, 0);
     lv_obj_set_size(s_ui.status_bar, 320, STATUS_BAR_HEIGHT);

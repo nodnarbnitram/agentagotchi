@@ -13,11 +13,11 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#define PROVISION_PREFIX "CODEX_PET_PROVISION "
+#define PROVISION_PREFIX "AGOT_PROVISION "
 #define PROVISION_BUFFER_SIZE 8192
 
 static const char *TAG = "pet_settings";
-static const char *NAMESPACE = "codex_pet";
+static const char *NAMESPACE = "agentagotchi";
 
 static void secure_clear(void *memory, size_t length)
 {

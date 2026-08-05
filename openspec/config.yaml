@@ -1,0 +1,109 @@
+schema: spec-driven
+
+context: |
+  Agentagotchi is a privacy-preserving status companion for agent work. The
+  repository currently contains a Codex-only prototype: a Go 1.22 macOS bridge
+  and hook receiver, an authenticated WSS protocol, an ESP-IDF 5.5.x firmware
+  application for the ESP32-S3-BOX-3 plus SENSOR dock, a Codex status plugin,
+  and Python asset/release checks.
+
+  HANDOFF.md is the approved brief for rebuilding that prototype in place as a
+  multi-harness system. One Edge Bridge per machine owns Task Presences from
+  local Harness Adapters (Codex and Pi first). An optional Home Bridge relays
+  privacy-safe presence from remote Edges. A BOX-3 may merge several direct and
+  Home-relayed Presence Feeds. Git history is the rollback path: the rebuild
+  deliberately does not preserve the prototype protocol, credentials,
+  persistence, commands, or provisioning compatibility.
+
+  Use the canonical domain language in CONTEXT.md exactly. In particular,
+  distinguish Agent Harness, Harness Adapter, Edge Bridge, Home Bridge, Home,
+  Harness Session, Task Presence, Task Presence ID, Presence Feed, Device
+  Capability, Featured Task, Focus Action, Pairing, Acknowledged Task Presence,
+  and Snoozed Task Presence. Respect the prohibited synonyms documented there.
+
+  The privacy boundary is a product invariant. Presence and status paths may
+  contain only opaque Task Presence IDs, bounded Safe Titles, generic
+  state/reason, allowlisted capabilities, counts, ordering metadata, and
+  timestamps required by the versioned contract. Prompts, commands, tool
+  payloads, transcripts, full paths, credentials, private keys, Wi-Fi secrets,
+  and harness-native session IDs must not cross the owning Edge or appear in
+  logs or privacy-safe persistence. Safe Titles never determine routing.
+
+  HANDOFF.md and accepted decisions in docs/adr/ are authoritative for the
+  rebuild unless a change explicitly amends or supersedes them. Important
+  boundaries include:
+  - The semantic core contains no harness lifecycle, transport, persistence, or
+    display-specific policy.
+  - Presence is Edge-owned; Home aggregates and relays but is not task authority.
+  - Harness-native session IDs never leave the owning Edge; public identity is
+    an opaque canonical UUID assigned by that Edge.
+  - Presence wires use bounded, complete replacement snapshots and fail-closed
+    schema/protocol identification.
+  - Device actions resolve through the observed presence route, require an
+    advertised capability, dispatch only through the owning registered Harness
+    Adapter, are deduplicated at the origin Edge, and are never queued.
+  - Focus is the first harness capability. Approve, deny, respond, dictate, and
+    microphone/STT remain deferred until explicitly designed, authenticated,
+    protocol-versioned, capability-gated, and tested.
+  - Browsing or featuring a Task Presence changes device presentation only and
+    never invokes a harness action.
+
+  Read docs/PROTOCOL.md before changing WSS messages, provisioning,
+  authentication, pairing, focus, or any device-to-bridge control. During the
+  approved rebuild, replace the prototype protocol atomically and update host
+  and firmware implementations together; do not create parallel legacy and new
+  state machines.
+
+  Follow AGENTS.md for implementation and safety rules. Run `make test` for
+  source changes. When firmware changes and ESP-IDF 5.5.x is active, also run
+  `idf.py -C firmware build`. Compilation is not physical-kit acceptance; record
+  real hardware results only in docs/HARDWARE_ACCEPTANCE.md. Never install,
+  flash, or provision without explicit user authorization.
+
+rules:
+  proposal:
+    - "Ground the proposal in the current code, HANDOFF.md, CONTEXT.md, applicable main specs, docs/PROTOCOL.md, and relevant ADRs; cite repository paths for material current-state claims."
+    - "Separate the current Codex-only prototype from the approved Agentagotchi target architecture. Do not describe planned HANDOFF.md behavior as already implemented."
+    - "State explicitly whether observable behavior, a wire contract, persisted state, credentials, provisioning, device interaction, or hardware requirements change."
+    - "Identify affected runtime roles, Harness Adapters, Presence Feeds, authority seams, privacy boundaries, deployment targets, generated artifacts, and compatibility implications where applicable."
+    - "Include explicit non-goals and preserve HANDOFF.md deferrals unless the proposal deliberately expands scope and explains the required protocol, security, privacy, and test work."
+
+  specs:
+    - "Use the canonical language from CONTEXT.md and specify observable contracts rather than package layout or framework internals."
+    - "For every status or persistence contract, define an explicit allowlist and prove that prompts, commands, tool payloads, transcripts, full paths, credentials, private keys, Wi-Fi secrets, and harness-native session IDs are structurally excluded."
+    - "Cover identity ownership, schema bounds, authentication/authorization, ordering, duplicate delivery, stale generations or revisions, reconnect replacement, lease expiry, partial failure, revocation, and compatibility whenever relevant."
+    - "For Device Capabilities, require exact Task Presence ID and observed revision validation, route and ownership checks, an advertised allowlisted capability, origin-edge deduplication, exact-success acknowledgement, and fail-closed behavior with no queued or fallback action."
+    - "For device behavior, keep Featured Task selection separate from Focus Action, define per-feed replacement and merge semantics, and cover disconnects, duplicate direct/relayed presence, priority/FIFO behavior, acknowledgement, and snooze where applicable."
+    - "Do not claim physical hardware acceptance from compilation, host tests, simulation, or static resource estimates."
+
+  design:
+    - "Inspect the affected code, tests, HANDOFF.md, CONTEXT.md, docs/PROTOCOL.md, and relevant ADRs before choosing an approach; prefer one explicit authority seam over parallel implementations."
+    - "Preserve the role boundaries among semantic core, Edge service, Home service, Harness Adapters, pairing/auth, feed and upstream protocols, administration APIs, clients, and firmware. Keep Home free of local harness and desktop authority."
+    - "Record which ADRs the design preserves, amends, or supersedes. Treat unresolved changes to privacy, authority, identity, dismissal, retention, snapshots, action delivery, or prototype replacement as blockers rather than implicit implementation choices."
+    - "For protocol or control changes, include versioning, capability negotiation, authentication, authorization, strict bounds, replay/deduplication behavior, host/firmware coordination, rollout or flag-day ordering, and rollback."
+    - "For persistence and liveness, distinguish wall-clock timestamps from monotonic lease/retention decisions and specify crash recovery, stale data handling, expiry, capacity bounds, and owner-only storage."
+    - "For firmware work, include bounded memory/resource ownership, LVGL task safety, reconnect behavior, resource profiling, and the physical BOX-3 acceptance evidence required beyond automated tests."
+    - "When artwork or generators change, preserve assets/source/pet_base.png as the source of truth, regenerate with `make assets`, and include every changed desktop, firmware, and plugin artifact."
+    - "When release firmware changes, regenerate release/firmware binaries, dependency lock, hashes, and BUILD.md together; never hand-edit binaries or checksums."
+
+  tasks:
+    - "Organize work in dependency order from semantic/privacy contracts through authority and protocol seams to transports, clients, firmware UI, and end-to-end acceptance. Do not skip semantic/privacy tests to begin UI or remote networking."
+    - "Make each task independently verifiable against a spec scenario, design decision, privacy invariant, or migration invariant, and place focused regression tests beside the behavior they protect."
+    - "Include coordinated host, firmware, protocol-document, schema/contract-test, and version updates in the same change whenever a wire message or device control changes."
+    - "Include `make test` as the final source validation gate, plus `idf.py -C firmware build` for firmware changes when ESP-IDF 5.5.x is active. Keep physical hardware acceptance as a separate explicit task."
+    - "Include `make assets` and generated asset updates for artwork/generator changes, and coordinated release bundle regeneration for release firmware changes."
+    - "Keep installation, flashing, provisioning, production deployment, credential entry, and physical hardware operation as distinct, explicitly approved actions; implementation completion does not imply any of them occurred."
+
+operations:
+  apply:
+    guidance:
+      - "Before editing, inspect the current task's referenced specs, design decisions, ADRs, source seams, and tests; distinguish prototype behavior from the approved rebuild target."
+      - "Preserve unrelated user changes and stay within the approved proposal, design, and task scope. Do not silently implement deferred controls, audio paths, mesh relaying, or speculative harness behavior."
+      - "Maintain the privacy allowlist at every hook, adapter IPC, persistence, log, Edge-to-Home, and Presence Feed boundary. Raw adapter payloads and sensitive values must never be logged."
+      - "For device actions, validate and resolve ownership fail-closed, dispatch only an exact registered capability, acknowledge only exact success, and never add app-opening or cross-task fallback behavior."
+      - "Run narrow checks while iterating, then all applicable repository gates before marking tasks complete. Do not claim unrun checks or physical acceptance."
+      - "Do not edit ignored ESP-IDF output or hand-edit release binaries/checksums. Do not install, flash, provision, deploy, or perform other external writes without explicit approval."
+  archive:
+    guidance:
+      - "Archive only after implementation tasks, applicable validation, main-spec synchronization, protocol/ADR documentation, generated artifacts, and release-contract updates are complete."
+      - "Summarize the exact automated verification evidence, separate any authorized physical-kit evidence, and explicitly record approved deferred work, skipped checks, and remaining risks."

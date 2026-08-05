@@ -4,10 +4,10 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.openai.codexpet</string>
+  <string>com.agentagotchi.edge</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__APP_DIR__/bin/codex-pet</string>
+    <string>__APP_DIR__/bin/agentagotchi</string>
     <string>serve</string>
     <string>--data-dir</string>
     <string>__APP_DIR__</string>
@@ -28,9 +28,9 @@
   <string>__APP_DIR__/bridge.log</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>CODEX_PET_BRIDGE</key>
-    <string>__APP_DIR__/bin/codex-pet</string>
-    <key>CODEX_PET_DATA_DIR</key>
+    <key>AGENTAGOTCHI_BRIDGE</key>
+    <string>__APP_DIR__/bin/agentagotchi</string>
+    <key>AGENTAGOTCHI_DATA_DIR</key>
     <string>__APP_DIR__</string>
   </dict>
 </dict>

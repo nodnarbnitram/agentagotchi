@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"codexpet.local/codex-pet/internal/hook"
-	"codexpet.local/codex-pet/internal/model"
+	"agentagotchi.local/agentagotchi/internal/hook"
+	"agentagotchi.local/agentagotchi/internal/model"
 )
 
 const maxSeenEvents = 4096

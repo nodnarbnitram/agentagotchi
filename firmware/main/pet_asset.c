@@ -27,7 +27,7 @@ bool pet_asset_open(pet_asset_t *asset)
         return false;
     }
     size_t total = (size_t)(pet_binary_end - pet_binary_start);
-    if (total < PET_HEADER_SIZE || memcmp(pet_binary_start, "CPET", 4) != 0 ||
+    if (total < PET_HEADER_SIZE || memcmp(pet_binary_start, "AGOT", 4) != 0 ||
         read_u16(pet_binary_start + 4) != PET_ASSET_VERSION) {
         return false;
     }

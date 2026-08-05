@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codexpet.local/codex-pet/internal/model"
+	"agentagotchi.local/agentagotchi/internal/model"
 )
 
 const maxHookBytes = 1 << 20

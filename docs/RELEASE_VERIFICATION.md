@@ -58,7 +58,7 @@ go vet passed
 3 release contract tests passed
 Plugin validation passed
 macOS host binary: Mach-O 64-bit executable arm64
-codex-pet version: 0.1.0
+agentagotchi version: 0.1.0
 hook/install shell syntax: passed
 hook fail-open smoke (bridge absent): passed
 plugin/hook/asset JSON syntax: passed
@@ -78,20 +78,20 @@ those dependencies:
 
 ```sh
 /Users/brandon/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 \
-  -m pip install --target /private/tmp/codex-pet-release-pydeps PyYAML==6.0.2
-PYTHONPATH=/private/tmp/codex-pet-release-pydeps make test \
+  -m pip install --target /private/tmp/agentagotchi-release-pydeps PyYAML==6.0.2
+PYTHONPATH=/private/tmp/agentagotchi-release-pydeps make test \
   PYTHON=/Users/brandon/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
 make build-host
-file work/bin/codex-pet
-./work/bin/codex-pet version
-sh -n scripts/install-macos.sh plugin/codex-pet-status/scripts/hook.sh
+file work/bin/agentagotchi
+./work/bin/agentagotchi version
+sh -n scripts/install-macos.sh plugin/agentagotchi-status/scripts/hook.sh
 printf '%s\n' '{"prompt":"secret"}' |
-  CODEX_PET_BRIDGE=/nonexistent PATH=/usr/bin:/bin \
-  plugin/codex-pet-status/scripts/hook.sh
-python3 -m json.tool plugin/codex-pet-status/.codex-plugin/plugin.json
-python3 -m json.tool plugin/codex-pet-status/hooks/hooks.json
-python3 -m json.tool assets/generated/codex-pet-v1.json
-plutil -lint packaging/com.openai.codexpet.plist.in
+  AGENTAGOTCHI_BRIDGE=/nonexistent PATH=/usr/bin:/bin \
+  plugin/agentagotchi-status/scripts/hook.sh
+python3 -m json.tool plugin/agentagotchi-status/.codex-plugin/plugin.json
+python3 -m json.tool plugin/agentagotchi-status/hooks/hooks.json
+python3 -m json.tool assets/generated/agentagotchi-v1.json
+plutil -lint packaging/com.agentagotchi.edge.plist.in
 ```
 
 The complete host suite was repeated after the Mac and firmware slices were
@@ -100,8 +100,8 @@ afterward.
 
 ### Recorded ESP-IDF results
 
-The retained `CONFIG_CODEX_PET_SENSOR_BAR=y` build and an isolated
-`CONFIG_CODEX_PET_SENSOR_BAR=n` build both completed warning-free with ESP-IDF
+The retained `CONFIG_AGENTAGOTCHI_SENSOR_BAR=y` build and an isolated
+`CONFIG_AGENTAGOTCHI_SENSOR_BAR=n` build both completed warning-free with ESP-IDF
 5.5.5 and `espressif/esp-box-3` 3.2.0. `make firmware-test` also passed.
 
 The enabled app is `3,669,520` bytes (`0x37fe10`) and leaves `3,670,512` bytes
@@ -155,10 +155,10 @@ discharge, and soak checks remain outstanding.
 ### Installed-path result
 
 The personal marketplace entry and cache-busted
-`codex-pet-status@personal` plugin were installed and enabled. Codex initially
+`agentagotchi-status@personal` plugin were installed and enabled. Codex initially
 skipped all nine hooks pending trust review; after trusting the exact
 definitions with `/hooks`, a real `SessionEnd` advanced the bridge sequence
-from 2 to 3. The arm64 companion is loaded as `com.openai.codexpet`, its health
+from 2 to 3. The arm64 companion is loaded as `com.agentagotchi.edge`, its health
 endpoint passes, and the BOX WSS socket is established.
 
 ## Hardware-only coverage

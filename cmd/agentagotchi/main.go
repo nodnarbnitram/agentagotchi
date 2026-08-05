@@ -14,17 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"codexpet.local/codex-pet/internal/bridge"
-	"codexpet.local/codex-pet/internal/config"
-	"codexpet.local/codex-pet/internal/hook"
-	"codexpet.local/codex-pet/internal/provision"
+	"agentagotchi.local/agentagotchi/internal/bridge"
+	"agentagotchi.local/agentagotchi/internal/config"
+	"agentagotchi.local/agentagotchi/internal/hook"
+	"agentagotchi.local/agentagotchi/internal/provision"
 )
 
 const version = "0.1.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "codex-pet:", err)
+		fmt.Fprintln(os.Stderr, "agentagotchi:", err)
 		os.Exit(1)
 	}
 }
@@ -66,7 +66,7 @@ func runServe(args []string) error {
 	return bridge.Serve(ctx, bridge.Options{
 		DataDir: *dataDir, HostName: *host, Port: *port, CodexBinary: *codexBin,
 		DisableMDNS: *noMDNS, DisableAppServer: *noAppServer,
-		Logger: log.New(os.Stderr, "codex-pet: ", log.LstdFlags),
+		Logger: log.New(os.Stderr, "agentagotchi: ", log.LstdFlags),
 	})
 }
 
@@ -131,7 +131,7 @@ func runProvision(args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `Usage: codex-pet <command> [options]
+	fmt.Fprintln(os.Stderr, `Usage: agentagotchi <command> [options]
 
 Commands:
   serve       Run the macOS bridge

@@ -1,5 +1,5 @@
 {
-  "description": "Privacy-filtered lifecycle status for the local Codex Pet bridge.",
+  "description": "Privacy-filtered lifecycle status for the local Agentagotchi bridge.",
   "hooks": {
     "SessionStart": [
       {

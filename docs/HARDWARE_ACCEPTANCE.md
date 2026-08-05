@@ -48,8 +48,8 @@ cell model, bridge version, and test date before running this checklist.
       decreases monotonically enough to be useful.
 
 If hardware testing finds an unresolved UI or stability regression, rebuild with
-`CONFIG_CODEX_PET_SENSOR_BAR=n`. The shipped default is enabled.
+`CONFIG_AGENTAGOTCHI_SENSOR_BAR=n`. The shipped default is enabled.
 
-Before release, also compile once with `CONFIG_CODEX_PET_SENSOR_BAR=n` to verify
+Before release, also compile once with `CONFIG_AGENTAGOTCHI_SENSOR_BAR=n` to verify
 that the fallback remains buildable. This compile is a switch-integrity check,
 not a substitute for running the shipped, enabled configuration.

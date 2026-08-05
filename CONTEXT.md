@@ -1,6 +1,6 @@
 # Agent Presence
 
-This context describes how agent work running across harnesses and machines becomes one user-visible presence model for Agent Pet devices and future clients.
+This context describes how agent work running across harnesses and machines becomes one user-visible presence model for Agentagotchi devices and future clients.
 
 ## Language
 
@@ -52,6 +52,26 @@ _Avoid_: Focused task, active task
 A Device Capability that asks the owning Agent Harness to foreground a Harness Session when that harness and machine support it.
 _Avoid_: Feature, select
 
+**Terminal Task Presence**:
+A Task Presence whose work has finished and that remains only as a notification: `ready` or `blocked`. A still-live presence (`idle`, `running`, `needs_input`) is transient.
+_Avoid_: completed task, finished session
+
+**Acknowledged Task Presence**:
+A Terminal Task Presence the user has dismissed, either through a successful Device Capability action on it or an explicit dismiss gesture. The owning Edge Bridge removes it from every Presence Feed; it resurfaces only if the Harness Session later reaches a new terminal state.
+_Avoid_: read receipt, seen state
+
+**Snoozed Task Presence**:
+A Task Presence awaiting user input (`needs_input`) that the user has set aside without approving, denying, or answering. It remains in every Presence Feed but stops claiming the Featured Task until its state or reason next changes.
+_Avoid_: dismissed task, muted task, parked task
+
 **Pairing**:
 An explicit trust relationship authorizing one role-scoped direction of presence delivery: Edge Bridge to device, Edge Bridge to Home Bridge, or Home Bridge to device.
 _Avoid_: Peering, mesh link
+
+**Pairing Ceremony**:
+The short-lived, one-use device-code authorization state machine that establishes a Pairing. The connecting client displays the code and the receiving service's authenticated administrator approves it, issuing a unique, revocable, role-scoped credential; the shape is identical for all three Pairing directions.
+_Avoid_: Provisioning, onboarding
+
+**Safe Title**:
+The only human-readable label on a Task Presence: an allowlisted harness name and an optional user-approved Edge alias, bounded and sanitized. It is never derived from hostnames, paths, session names, prompts, transcripts, or commands, and routing never depends on it.
+_Avoid_: Session name, task name

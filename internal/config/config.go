@@ -33,17 +33,17 @@ type Identity struct {
 }
 
 func DefaultDataDir() string {
-	if v := os.Getenv("CODEX_PET_DATA_DIR"); v != "" {
+	if v := os.Getenv("AGENTAGOTCHI_DATA_DIR"); v != "" {
 		return v
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".codex-pet"
+		return ".agentagotchi"
 	}
 	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support", "CodexPet")
+		return filepath.Join(home, "Library", "Application Support", "Agentagotchi")
 	}
-	return filepath.Join(home, ".local", "share", "codex-pet")
+	return filepath.Join(home, ".local", "share", "agentagotchi")
 }
 
 func DefaultHostName() string {
@@ -62,7 +62,7 @@ func DefaultHostName() string {
 			return v
 		}
 	}
-	return "codex-pet.local"
+	return "agentagotchi.local"
 }
 
 func EnsureIdentity(dataDir, hostName string, port int) (Identity, error) {
@@ -149,13 +149,13 @@ func generateCertificate(certPath, keyPath, hostName string) error {
 	now := time.Now()
 	names := uniqueStrings([]string{
 		hostName, strings.TrimSuffix(hostName, ".local"),
-		"codex-pet.local", "localhost",
+		"agentagotchi.local", "localhost",
 	})
 	template := x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   hostName,
-			Organization: []string{"Codex Pet Local Bridge"},
+			Organization: []string{"Agentagotchi Edge Bridge"},
 		},
 		NotBefore: now.Add(-time.Hour),
 		NotAfter:  now.AddDate(10, 0, 0),

@@ -18,12 +18,12 @@ import (
 	"sync"
 	"time"
 
-	"codexpet.local/codex-pet/internal/appserver"
-	"codexpet.local/codex-pet/internal/config"
-	"codexpet.local/codex-pet/internal/focus"
-	"codexpet.local/codex-pet/internal/model"
-	"codexpet.local/codex-pet/internal/state"
-	"codexpet.local/codex-pet/internal/ws"
+	"agentagotchi.local/agentagotchi/internal/appserver"
+	"agentagotchi.local/agentagotchi/internal/config"
+	"agentagotchi.local/agentagotchi/internal/focus"
+	"agentagotchi.local/agentagotchi/internal/model"
+	"agentagotchi.local/agentagotchi/internal/state"
+	"agentagotchi.local/agentagotchi/internal/ws"
 )
 
 type Options struct {
@@ -48,7 +48,7 @@ type Server struct {
 
 func Serve(ctx context.Context, opts Options) error {
 	if opts.Logger == nil {
-		opts.Logger = log.New(os.Stderr, "codex-pet: ", log.LstdFlags)
+		opts.Logger = log.New(os.Stderr, "agentagotchi: ", log.LstdFlags)
 	}
 	id, err := config.EnsureIdentity(opts.DataDir, opts.HostName, opts.Port)
 	if err != nil {
@@ -342,7 +342,7 @@ func advertiseMDNS(ctx context.Context, port int, logger *log.Logger) {
 		logger.Printf("Bonjour advertisement skipped: dns-sd not found")
 		return
 	}
-	cmd := exec.CommandContext(ctx, path, "-R", "Codex Pet", "_codex-pet._tcp", "local",
+	cmd := exec.CommandContext(ctx, path, "-R", "Agentagotchi", "_agentagotchi._tcp", "local",
 		strconv.Itoa(port), "version=1")
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard

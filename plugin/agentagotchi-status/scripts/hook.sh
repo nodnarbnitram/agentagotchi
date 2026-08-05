@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-bridge="${CODEX_PET_BRIDGE:-}"
+bridge="${AGENTAGOTCHI_BRIDGE:-}"
 if [ -z "$bridge" ]; then
-  bridge="$HOME/Library/Application Support/CodexPet/bin/codex-pet"
+  bridge="$HOME/Library/Application Support/Agentagotchi/bin/agentagotchi"
 fi
 if [ ! -x "$bridge" ]; then
-  bridge="$(command -v codex-pet 2>/dev/null || true)"
+  bridge="$(command -v agentagotchi 2>/dev/null || true)"
 fi
 
 if [ -n "$bridge" ] && [ -x "$bridge" ]; then

@@ -1,7 +1,7 @@
 {
-  "name": "codex-pet-status",
+  "name": "agentagotchi-status",
   "version": "0.1.0+codex.20260726234501",
-  "description": "Sends privacy-filtered Codex lifecycle status to the local Codex Pet bridge.",
+  "description": "Sends privacy-filtered Codex lifecycle status to the local Agentagotchi bridge.",
   "author": {
     "name": "Brandon"
   },
@@ -13,7 +13,7 @@
     "local"
   ],
   "interface": {
-    "displayName": "Codex Pet Status",
+    "displayName": "Agentagotchi Status",
     "shortDescription": "Mirrors Codex task states to a local ESP32 pet.",
     "longDescription": "Observes lifecycle events through Codex hooks and sends only task identifiers and generic state changes to a local bridge. Prompts, commands, output, transcripts, and file paths are discarded.",
     "developerName": "Brandon",
@@ -22,7 +22,7 @@
       "Automation"
     ],
     "defaultPrompt": [
-      "Show me how Codex Pet protects task privacy."
+      "Show me how Agentagotchi protects task privacy."
     ],
     "brandColor": "#19C3B1",
     "composerIcon": "./assets/icon.png",

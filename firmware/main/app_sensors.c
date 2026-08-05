@@ -306,7 +306,7 @@ static void sensor_task(void *argument)
         if (changed) {
             context.state.sensor_updated_us = now;
             context.state.sensor_updated_at = wall_clock_seconds();
-#if CONFIG_CODEX_PET_LOG_SENSOR_DIAGNOSTICS
+#if CONFIG_AGENTAGOTCHI_LOG_SENSOR_DIAGNOSTICS
             ESP_LOGI(TAG, "T=%.2fC RH=%.1f%% battery=%.3fV/%d%% presence=%d",
                 context.state.temperature_c, context.state.humidity_rh,
                 context.state.battery_voltage, context.state.battery_percent,
@@ -319,7 +319,7 @@ static void sensor_task(void *argument)
 
 esp_err_t app_sensors_start(void)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
     if (xTaskCreatePinnedToCoreWithCaps(
             sensor_task,
             "pet_sensors",

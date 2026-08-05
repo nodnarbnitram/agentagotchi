@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the documented Codex Pet v1 desktop and ESP32 assets."""
+"""Build the documented Agentagotchi v1 desktop and ESP32 assets."""
 
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ def build_device_binary(sheet: Image.Image) -> bytes:
             frames.extend(rgb565_bytes(device_frame))
     header = struct.pack(
         "<4sHHHBBI",
-        b"CPET",
+        b"AGOT",
         1,
         DEVICE_WIDTH,
         DEVICE_HEIGHT,
@@ -200,16 +200,16 @@ def write_outputs(root: Path, source_path: Path) -> None:
     sheet = build_sheet(subject)
     generated = root / "assets" / "generated"
     firmware_assets = root / "firmware" / "main" / "assets"
-    plugin_assets = root / "plugin" / "codex-pet-status" / "assets"
+    plugin_assets = root / "plugin" / "agentagotchi-status" / "assets"
     for directory in (generated, firmware_assets, plugin_assets):
         directory.mkdir(parents=True, exist_ok=True)
 
-    sheet_path = generated / "codex-pet-v1.png"
+    sheet_path = generated / "agentagotchi-v1.png"
     sheet.save(sheet_path, optimize=True)
     preview = Image.new("RGBA", sheet.size, BACKGROUND)
     preview.alpha_composite(sheet)
     preview.resize((768, 936), Image.Resampling.NEAREST).save(
-        generated / "codex-pet-v1-preview.png", optimize=True
+        generated / "agentagotchi-v1-preview.png", optimize=True
     )
     (firmware_assets / "pet_device_rgb565.bin").write_bytes(build_device_binary(sheet))
 
@@ -222,7 +222,7 @@ def write_outputs(root: Path, source_path: Path) -> None:
     )
 
     metadata = {
-        "name": "Codex Pet v1",
+        "name": "Agentagotchi v1",
         "version": 1,
         "sheet": {
             "width": SHEET_WIDTH,
@@ -237,7 +237,7 @@ def write_outputs(root: Path, source_path: Path) -> None:
             "transparent": True,
         },
         "device": {
-            "format": "CPET RGB565 little-endian",
+            "format": "AGOT RGB565 little-endian",
             "width": DEVICE_WIDTH,
             "height": DEVICE_HEIGHT,
             "backgroundRgb": list(BACKGROUND[:3]),
@@ -246,7 +246,7 @@ def write_outputs(root: Path, source_path: Path) -> None:
             "stateOrderMatchesFirmwareEnum": True,
         },
     }
-    (generated / "codex-pet-v1.json").write_text(
+    (generated / "agentagotchi-v1.json").write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
 

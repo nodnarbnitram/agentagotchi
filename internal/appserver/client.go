@@ -87,7 +87,7 @@ func Start(ctx context.Context, binary string) (*Client, error) {
 	var initResult json.RawMessage
 	if err := c.call(ctx, "initialize", map[string]any{
 		"clientInfo": map[string]any{
-			"name": "codex_pet_bridge", "title": "Codex Pet Bridge", "version": "0.1.0",
+			"name": "agentagotchi_edge", "title": "Agentagotchi Edge Bridge", "version": "0.1.0",
 		},
 	}, &initResult); err != nil {
 		c.Close()
@@ -194,7 +194,7 @@ func (c *Client) readLoop(r io.Reader) {
 }
 
 func locateCodex() string {
-	if v := os.Getenv("CODEX_PET_CODEX_BIN"); v != "" {
+	if v := os.Getenv("AGENTAGOTCHI_CODEX_BIN"); v != "" {
 		return v
 	}
 	candidates := []string{
