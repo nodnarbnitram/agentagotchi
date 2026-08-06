@@ -81,6 +81,16 @@ type FeedSnapshot struct {
 	Tasks          []FeedTask `json:"tasks"`
 }
 
+// UpstreamActionRequest is a Home → Edge reverse-routed action.
+type UpstreamActionRequest struct {
+	Schema         string     `json:"schema"`
+	Type           string     `json:"type"` // "action_request"
+	ActionID       string     `json:"actionId"`
+	Capability     Capability `json:"capability"`
+	TaskPresenceID string     `json:"taskPresenceId"`
+	SeenRevision   uint64     `json:"seenRevision"`
+}
+
 // UpstreamSnapshot is the Edge → Home absolute snapshot. Same allowlist as
 // the feed, plus Edge ordering metadata.
 type UpstreamSnapshot struct {

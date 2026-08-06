@@ -62,16 +62,25 @@ func runServe(args []string) error {
 	codexBin := fs.String("codex-bin", "", "Codex CLI path for read-only metadata")
 	noMDNS := fs.Bool("no-mdns", false, "disable Bonjour advertisement")
 	noAppServer := fs.Bool("no-app-server", false, "disable read-only App Server metadata")
+	homeURL := fs.String("home-url", "", "optional Home Bridge wss:// URL (Edge→Home upstream)")
+	homeToken := fs.String("home-token", "", "edge-ingress pairing credential for --home-url")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return edge.Serve(ctx, edge.Options{
+	opts := edge.Options{
 		DataDir: *dataDir, HostName: *host, Port: *port, CodexBinary: *codexBin,
 		DisableMDNS: *noMDNS, DisableAppServer: *noAppServer,
 		Logger: log.New(os.Stderr, "agentagotchi: ", log.LstdFlags),
-	})
+	}
+	if *homeURL != "" {
+		if *homeToken == "" {
+			return fmt.Errorf("--home-url requires --home-token (pair with 'agentagotchi pair' first)")
+		}
+		opts.Upstream = &edge.UpstreamConfig{URL: *homeURL, Token: *homeToken}
+	}
+	return edge.Serve(ctx, opts)
 }
 
 func runHook(args []string) error {

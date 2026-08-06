@@ -37,6 +37,9 @@ type Options struct {
 	FeedAuthenticator FeedAuthenticator
 	FocusRunner       codex.CommandRunner
 	PresenceConfig    presence.Config
+	// Upstream optionally pairs this Edge to a Home Bridge (Edge→Home
+	// outbound connection).
+	Upstream *UpstreamConfig
 }
 
 type FeedAuthenticator interface {
@@ -65,6 +68,8 @@ type Service struct {
 	id               config.Identity
 	ceremony         *pairing.Ceremony
 	credStore        *pairing.Store
+	upstream         *UpstreamClient
+	notifyUpstream   chan struct{}
 	version          string
 	startedAt        time.Time
 	edgeID           string
@@ -133,6 +138,10 @@ func NewService(opts Options) (*Service, error) {
 		authenticator = PairingFeedAuthenticator{LegacyToken: id.Token, Ceremony: s.ceremony}
 	}
 	s.authenticator = authenticator
+	if opts.Upstream != nil {
+		s.upstream = NewUpstreamClient(*opts.Upstream, core, s.edgeID, s.router)
+		s.notifyUpstream = make(chan struct{}, 1)
+	}
 	focus := codex.FocusHandler(opts.FocusRunner)
 	s.router.Register("codex", contract.CapabilityFocus, func(_ context.Context, nativeID string, _ contract.FeedAction) error {
 		return focus(nativeID)
@@ -180,6 +189,10 @@ func (s *Service) Serve(ctx context.Context) error {
 	}()
 	go s.broadcastLoop(ctx)
 	go s.maintenanceLoop(ctx)
+	if s.upstream != nil {
+		go s.upstream.Run(ctx)
+		go s.upstreamNotifyLoop(ctx)
+	}
 	if !s.disableMDNS {
 		go advertiseMDNS(ctx, s.id.Port, s.logger)
 	}
@@ -358,7 +371,25 @@ func (s *Service) enrichFromAppServer(ctx context.Context) {
 	}
 }
 
+// upstreamNotifyLoop mirrors core changes to the Home relay when paired.
+func (s *Service) upstreamNotifyLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.notifyUpstream:
+			s.upstream.NotifySnapshot()
+		}
+	}
+}
+
 func (s *Service) signal() {
+	if s.upstream != nil {
+		select {
+		case s.notifyUpstream <- struct{}{}:
+		default:
+		}
+	}
 	select {
 	case s.notify <- struct{}{}:
 	default:
