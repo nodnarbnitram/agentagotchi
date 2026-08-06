@@ -72,7 +72,8 @@ is a voltage-derived estimate, not a fuel-gauge measurement.
 make test          # Go suite + firmware host tests + asset/release contracts + plugin validation
 npm install        # workspace deps for packages/*
 npm test           # Home Bridge + Pi adapter test suites
-make build-host    # work/bin/agentagotchi
+make build-host      # work/bin/agentagotchi
+make macos-admin     # work/macos-admin/AgentagotchiAdmin.app (optional admin client)
 idf.py -C firmware build
 make assets        # regenerate shared pet artwork after asset changes
 ```
@@ -87,6 +88,11 @@ Builds an arm64 binary, installs it under `~/Library/Application Support/Agentag
 copies the Codex hook plugin to `~/plugins/agentagotchi-status`, and loads
 `com.agentagotchi.edge` as a LaunchAgent. Restart Codex after installing or
 updating hooks, then open `/hooks` and trust all nine Agentagotchi hooks.
+
+The installer also builds and installs the optional macOS admin app
+(`clients/macos-admin`) as `AgentagotchiAdmin.app` under the app support
+directory when a Swift toolchain is present. Open it from there to manage
+pairing; the bundle is unsigned and intended as a local owner tool.
 
 The Edge creates these private local files with owner-only permissions:
 `identity.json` (random bearer token), `bridge-cert.pem`/`bridge-key.pem`

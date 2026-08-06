@@ -5,7 +5,7 @@ VENV_DIR ?= work/venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_STAMP := $(VENV_DIR)/.dev-deps
 
-.PHONY: all python-deps assets build-host firmware-build firmware-test plugin-validate provision-env test
+.PHONY: all python-deps assets build-host macos-admin firmware-build firmware-test plugin-validate provision-env test
 
 all: test build-host
 
@@ -23,6 +23,9 @@ build-host:
 	mkdir -p work/bin work/gocache
 	GOCACHE="$(CURDIR)/work/gocache" GOOS=darwin GOARCH=arm64 \
 		$(GO) build -trimpath -o work/bin/agentagotchi ./cmd/agentagotchi
+
+macos-admin:
+	scripts/build-macos-admin-app.sh $(CURDIR)/work/macos-admin
 
 provision-env: build-host
 	scripts/provision-from-env.sh
