@@ -186,7 +186,9 @@ export class HomePresence {
         state: task.state,
         reason: task.reason,
         subagentCount: task.subagentCount,
-        capabilities: task.capabilities,
+        // The feed schema requires an array; a null here is rejected by the
+        // firmware's strict validator and would blank the whole snapshot.
+        capabilities: task.capabilities ?? [],
         updatedAt: task.updatedAt,
         snoozed: task.snoozed,
       })),

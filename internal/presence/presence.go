@@ -364,6 +364,16 @@ func (c *Core) Detach(leaseID string) bool {
 	return changed
 }
 
+// nonNilCapabilities normalizes a nil slice to an empty one: the feed schema
+// requires an array (docs/PROTOCOL.md), and Go marshals nil slices as null,
+// which strict feed validators reject.
+func nonNilCapabilities(caps []contract.Capability) []contract.Capability {
+	if caps == nil {
+		return []contract.Capability{}
+	}
+	return append([]contract.Capability{}, caps...)
+}
+
 // ExpireLeases ends every lease whose deadline has passed (monotonic).
 func (c *Core) ExpireLeases() bool {
 	c.mu.Lock()
@@ -629,7 +639,7 @@ func (c *Core) Snapshot(originID, originKind string) contract.FeedSnapshot {
 			State:          tp.State,
 			Reason:         tp.Reason,
 			SubagentCount:  tp.SubagentCount,
-			Capabilities:   append([]contract.Capability(nil), tp.Capabilities...),
+			Capabilities:   nonNilCapabilities(tp.Capabilities),
 			UpdatedAt:      tp.UpdatedAt,
 			Snoozed:        tp.Snoozed,
 		})
@@ -690,7 +700,7 @@ func (c *Core) Featured() (contract.FeedTask, bool) {
 		State:          best.State,
 		Reason:         best.Reason,
 		SubagentCount:  best.SubagentCount,
-		Capabilities:   append([]contract.Capability(nil), best.Capabilities...),
+		Capabilities:   nonNilCapabilities(best.Capabilities),
 		UpdatedAt:      best.UpdatedAt,
 	}, true
 }

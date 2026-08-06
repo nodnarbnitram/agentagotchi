@@ -1,7 +1,9 @@
 package presence
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -475,4 +477,26 @@ func TestConcurrentAccess(t *testing.T) {
 		}(w)
 	}
 	wg.Wait()
+}
+
+func TestFeedNeverEmitsNullCapabilities(t *testing.T) {
+	core, _ := testCore()
+	lease := mustAttach(t, core, "pi", nil) // status-only adapter: no capabilities
+	if err := upsert(core, lease, 1, "native-pi-1", StateRunning, ReasonWorking); err != nil {
+		t.Fatal(err)
+	}
+	snap := core.Snapshot("edge-1", "edge")
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("snapshot tasks = %d, want 1", len(snap.Tasks))
+	}
+	if snap.Tasks[0].Capabilities == nil {
+		t.Fatal("feed task capabilities must be an empty array, never nil (marshals as null)")
+	}
+	payload, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), `"capabilities":null`) {
+		t.Fatalf("snapshot JSON must never contain null capabilities: %s", payload)
+	}
 }
