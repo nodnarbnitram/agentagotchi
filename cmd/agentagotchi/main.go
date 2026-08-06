@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"agentagotchi.local/agentagotchi/internal/bridge"
+	"agentagotchi.local/agentagotchi/internal/adapters/codex"
 	"agentagotchi.local/agentagotchi/internal/config"
-	"agentagotchi.local/agentagotchi/internal/hook"
+	"agentagotchi.local/agentagotchi/internal/edge"
 	"agentagotchi.local/agentagotchi/internal/provision"
 )
 
@@ -63,7 +63,7 @@ func runServe(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return bridge.Serve(ctx, bridge.Options{
+	return edge.Serve(ctx, edge.Options{
 		DataDir: *dataDir, HostName: *host, Port: *port, CodexBinary: *codexBin,
 		DisableMDNS: *noMDNS, DisableAppServer: *noAppServer,
 		Logger: log.New(os.Stderr, "agentagotchi: ", log.LstdFlags),
@@ -82,14 +82,14 @@ func runHook(args []string) error {
 	defer func() {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{})
 	}()
-	event, err := hook.Sanitize(os.Stdin, time.Now())
+	event, err := codex.Sanitize(os.Stdin, time.Now())
 	if err != nil {
 		return nil // Hook telemetry is best-effort and must never disrupt Codex.
 	}
 	if *socket == "" {
-		*socket = filepath.Join(*dataDir, "bridge.sock")
+		*socket = filepath.Join(*dataDir, "edge.sock")
 	}
-	_ = bridge.SendHook(*socket, event)
+	_ = edge.SendHook(*socket, event)
 	return nil
 }
 

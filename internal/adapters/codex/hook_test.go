@@ -1,12 +1,13 @@
-package hook
+package codex
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestSanitizeDropsSensitiveContent(t *testing.T) {
+func TestSanitizeEmitsStrictIPCHookAndDropsSensitiveContent(t *testing.T) {
 	input := `{
 		"session_id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 		"turn_id":"turn-1",
@@ -21,26 +22,22 @@ func TestSanitizeDropsSensitiveContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ev.Schema != "agentagotchi.ipc.v1" || ev.Type != "hook_event" || ev.Harness != "codex" {
+		t.Fatalf("wrong IPC envelope: %+v", ev)
+	}
 	if ev.Workspace != "secret-project" {
 		t.Fatalf("workspace = %q", ev.Workspace)
 	}
-	encoded := strings.ToLower(strings.Join([]string{
-		ev.EventID, ev.SessionID, ev.TurnID, ev.Event, ev.ToolName,
-		ev.ToolUseID, ev.AgentID, ev.Workspace,
-	}, " "))
-	for _, secret := range []string{"hunter2", "transcript", "private answer", "rm something", "/users/"} {
-		if strings.Contains(encoded, secret) {
-			t.Fatalf("sanitized event leaked %q", secret)
+	b, _ := json.Marshal(ev)
+	for _, secret := range []string{"hunter2", "transcript", "private answer", "rm something", "/Users/"} {
+		if strings.Contains(string(b), secret) {
+			t.Fatalf("sanitized frame leaked %q: %s", secret, b)
 		}
 	}
 }
 
 func TestQuestionToolAliases(t *testing.T) {
-	for _, name := range []string{
-		"request_user_input",
-		"functions.request_user_input",
-		"mcp__codex__request_user_input",
-	} {
+	for _, name := range []string{"request_user_input", "functions.request_user_input", "mcp__codex__request_user_input"} {
 		if !IsQuestionTool(name) {
 			t.Fatalf("%q was not recognized", name)
 		}

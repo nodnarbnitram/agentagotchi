@@ -102,6 +102,35 @@ func TestStaleProducerSequenceRejected(t *testing.T) {
 	}
 }
 
+func TestProducerSequenceIsLeaseGlobal(t *testing.T) {
+	c, _ := testCore()
+	lease := mustAttach(t, c, "pi", nil)
+	if err := upsert(c, lease, 5, "native-a", StateRunning, ReasonWorking); err != nil {
+		t.Fatal(err)
+	}
+	if err := upsert(c, lease, 4, "native-b", StateRunning, ReasonWorking); err != ErrStaleReport {
+		t.Fatalf("stale sequence for a different task = %v, want ErrStaleReport", err)
+	}
+	if c.Len() != 1 {
+		t.Fatalf("stale lease-global batch created a task, len=%d", c.Len())
+	}
+}
+
+func TestLocalIngestLeaseDoesNotExpire(t *testing.T) {
+	c, now := testCore()
+	lease, err := c.AttachLocal("codex", []contract.Capability{contract.CapabilityFocus})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := upsert(c, lease, 1, "native-a", StateRunning, ReasonWorking); err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(365 * 24 * time.Hour)
+	if c.ExpireLeases() || c.Len() != 1 {
+		t.Fatal("Edge-owned one-shot ingest source expired like a remote adapter lease")
+	}
+}
+
 func TestAbsoluteReportUpsertAndEnd(t *testing.T) {
 	c, _ := testCore()
 	lease := mustAttach(t, c, "codex", nil)

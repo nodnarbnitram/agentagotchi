@@ -16,7 +16,9 @@ package contract
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 )
@@ -112,6 +114,82 @@ type ActionResult struct {
 	Status   string `json:"status"` // ok | stale | unsupported | failed
 }
 
+// IPCHookEvent is the sanitized, one-shot Codex hook frame. Workspace is a
+// basename only and remains on the owner-only Edge IPC boundary; it is never
+// projected into a feed or upstream snapshot.
+type IPCHookEvent struct {
+	Schema          string    `json:"schema"`
+	Type            string    `json:"type"` // "hook_event"
+	EventID         string    `json:"eventId"`
+	Harness         string    `json:"harness"`
+	NativeSessionID string    `json:"nativeSessionId"`
+	Event           string    `json:"event"`
+	ToolName        string    `json:"toolName,omitempty"`
+	TurnID          string    `json:"turnId,omitempty"`
+	AgentID         string    `json:"agentId,omitempty"`
+	Workspace       string    `json:"workspace,omitempty"`
+	At              time.Time `json:"at"`
+}
+
+// IPCAdapterHello starts a long-lived leased adapter session.
+type IPCAdapterHello struct {
+	Schema         string       `json:"schema"`
+	Type           string       `json:"type"` // "adapter_hello"
+	Harness        string       `json:"harness"`
+	AdapterVersion string       `json:"adapterVersion"`
+	Capabilities   []Capability `json:"capabilities"`
+}
+
+type IPCHelloAck struct {
+	Schema       string `json:"schema"`
+	Type         string `json:"type"` // "hello_ack"
+	LeaseID      string `json:"leaseId"`
+	LeaseSeconds int64  `json:"leaseSeconds"`
+}
+
+// IPCPresence is an adapter's private absolute statement. NativeSessionID
+// and DisplayKey are accepted only on owner-only IPC and are structurally
+// absent from every Edge-crossing wire type above.
+type IPCPresence struct {
+	NativeSessionID string    `json:"nativeSessionId"`
+	DisplayKey      string    `json:"displayKey,omitempty"`
+	SafeTitle       string    `json:"safeTitle,omitempty"`
+	State           string    `json:"state"`
+	Reason          string    `json:"reason"`
+	SubagentCount   int       `json:"subagentCount,omitempty"`
+	ObservedAt      time.Time `json:"observedAt,omitempty"`
+}
+
+type IPCPresenceReport struct {
+	Schema      string        `json:"schema"`
+	Type        string        `json:"type"` // "presence_report"
+	LeaseID     string        `json:"leaseId"`
+	ProducerSeq uint64        `json:"producerSeq"`
+	Reports     []IPCPresence `json:"reports"`
+	Ends        []string      `json:"ends"`
+}
+
+type IPCHeartbeat struct {
+	Schema  string `json:"schema"`
+	Type    string `json:"type"` // "heartbeat"
+	LeaseID string `json:"leaseId"`
+}
+
+type IPCActionRequest struct {
+	Schema         string     `json:"schema"`
+	Type           string     `json:"type"` // "action_request"
+	ActionID       string     `json:"actionId"`
+	Capability     Capability `json:"capability"`
+	TaskPresenceID string     `json:"taskPresenceId"`
+}
+
+type IPCActionResult struct {
+	Schema   string `json:"schema"`
+	Type     string `json:"type"` // "action_result"
+	ActionID string `json:"actionId"`
+	Status   string `json:"status"` // ok | rejected | unsupported
+}
+
 // AdminStatus is the wire form of administration status: connectivity,
 // counts, and timestamps only.
 type AdminStatus struct {
@@ -187,6 +265,10 @@ func DecodeStrict(data []byte, wantSchema string, v any) error {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("contract: decode %s: %w", wantSchema, err)
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("contract: decode %s: trailing JSON value", wantSchema)
 	}
 	var probe struct {
 		Schema string `json:"schema"`

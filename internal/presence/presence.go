@@ -103,12 +103,11 @@ func (c Config) withDefaults() Config {
 // privateRecord is the Edge-private side of a Task Presence. It is never
 // serialized into any wire message or shared persistence (docs/adr/0005).
 type privateRecord struct {
-	adapter        string
-	nativeSession  string
-	displayKey     string
-	leaseID        string
-	producerID     string
-	lastProducerSq uint64
+	adapter       string
+	nativeSession string
+	displayKey    string
+	leaseID       string
+	producerID    string
 }
 
 // TaskPresence is the domain record. Only its allowlisted projection ever
@@ -145,6 +144,9 @@ type Lease struct {
 	ID        string
 	Adapter   string
 	ExpiresAt time.Time
+
+	persistent      bool
+	lastProducerSeq uint64
 }
 
 var (
@@ -204,6 +206,18 @@ func NewTaskPresenceID() (string, error) {
 // are the Device Capabilities this adapter may be asked to perform; the
 // registry is fail-closed — unknown capabilities are rejected.
 func (c *Core) Attach(adapter string, capabilities []contract.Capability) (Lease, error) {
+	return c.attach(adapter, capabilities, false)
+}
+
+// AttachLocal registers an Edge-owned ingest source that has no remote
+// connection or lease lifetime. This is used for one-shot hook receivers: the
+// Edge owns the reducer and explicitly ends sessions, so expiring them based
+// on an individual hook connection would be incorrect.
+func (c *Core) AttachLocal(adapter string, capabilities []contract.Capability) (Lease, error) {
+	return c.attach(adapter, capabilities, true)
+}
+
+func (c *Core) attach(adapter string, capabilities []contract.Capability, persistent bool) (Lease, error) {
 	for _, cap := range capabilities {
 		if cap != contract.CapabilityFocus {
 			return Lease{}, fmt.Errorf("%w: %q", ErrCapability, cap)
@@ -216,9 +230,10 @@ func (c *Core) Attach(adapter string, capabilities []contract.Capability) (Lease
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	lease := &Lease{
-		ID:        id,
-		Adapter:   adapter,
-		ExpiresAt: c.cfg.Now().Add(c.cfg.LeaseDuration),
+		ID:         id,
+		Adapter:    adapter,
+		ExpiresAt:  c.cfg.Now().Add(c.cfg.LeaseDuration),
+		persistent: persistent,
 	}
 	c.leases[id] = lease
 	return *lease, nil
@@ -232,7 +247,9 @@ func (c *Core) Renew(leaseID string) bool {
 	if !ok {
 		return false
 	}
-	lease.ExpiresAt = c.cfg.Now().Add(c.cfg.LeaseDuration)
+	if !lease.persistent {
+		lease.ExpiresAt = c.cfg.Now().Add(c.cfg.LeaseDuration)
+	}
 	return true
 }
 
@@ -247,6 +264,10 @@ func (c *Core) ApplyReports(leaseID string, producerSeq uint64, reports []Report
 	if !ok {
 		return false, ErrStaleReport
 	}
+	if producerSeq == 0 || (lease.lastProducerSeq != 0 && producerSeq <= lease.lastProducerSeq) {
+		return false, ErrStaleReport
+	}
+	lease.lastProducerSeq = producerSeq
 	changed := false
 	now := c.cfg.Now()
 	for _, r := range reports {
@@ -269,10 +290,6 @@ func (c *Core) ApplyReports(leaseID string, producerSeq uint64, reports []Report
 			c.byNative[key] = id
 			changed = true
 		}
-		if producerSeq <= tp.private.lastProducerSq && tp.private.lastProducerSq != 0 {
-			return changed, ErrStaleReport
-		}
-		tp.private.lastProducerSq = producerSeq
 		if tp.apply(r, now, c.alias[tp.ID]) {
 			changed = true
 		}
@@ -354,7 +371,7 @@ func (c *Core) ExpireLeases() bool {
 	now := c.cfg.Now()
 	changed := false
 	for id, lease := range c.leases {
-		if now.After(lease.ExpiresAt) {
+		if !lease.persistent && now.After(lease.ExpiresAt) {
 			delete(c.leases, id)
 			for taskID, tp := range c.tasks {
 				if tp.private.leaseID == id {
@@ -448,6 +465,49 @@ func (c *Core) ResolveCapability(taskPresenceID string, capability contract.Capa
 	return "", "", false
 }
 
+// HasTask reports whether a public Task Presence ID is currently owned by
+// this Core. Routers use it to distinguish an unknown task from an
+// unadvertised capability without exposing private routing data.
+func (c *Core) HasTask(taskPresenceID string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.tasks[taskPresenceID]
+	return ok
+}
+
+// TaskPresenceIDFor returns the public ID for an Edge-private adapter/native
+// pair. It is intended only for the Edge's capability-registration seam.
+func (c *Core) TaskPresenceIDFor(adapter, nativeSession string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	id, ok := c.byNative[nativeKey(adapter, nativeSession)]
+	return id, ok
+}
+
+// RestoreAliases loads the privacy-safe alias map persisted by the Edge.
+// Entries need not currently have a live private mapping; a restart rebuilds
+// those mappings from fresh adapter reports.
+func (c *Core) RestoreAliases(aliases map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for id, alias := range aliases {
+		if clean := contract.SanitizeSafeTitle(alias); clean != "" {
+			c.alias[id] = clean
+		}
+	}
+}
+
+// Aliases returns a copy suitable for Edge-local owner-only persistence.
+func (c *Core) Aliases() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string]string, len(c.alias))
+	for id, alias := range c.alias {
+		out[id] = alias
+	}
+	return out
+}
+
 // SetCapabilities replaces a Task Presence's advertised capabilities
 // (adapter-reported, validated at Attach/ApplyReports boundaries).
 func (c *Core) SetCapabilities(taskPresenceID string, capabilities []contract.Capability) error {
@@ -462,9 +522,24 @@ func (c *Core) SetCapabilities(taskPresenceID string, capabilities []contract.Ca
 	if tp == nil {
 		return ErrUnknownTask
 	}
+	if capabilitiesEqual(tp.Capabilities, capabilities) {
+		return nil
+	}
 	tp.Capabilities = append([]contract.Capability(nil), capabilities...)
 	c.bumpLocked()
 	return nil
+}
+
+func capabilitiesEqual(a, b []contract.Capability) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // EnforceRetention evicts Terminal Task Presences past TTL (monotonic) and

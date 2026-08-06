@@ -17,10 +17,10 @@ install, flash, or provision without explicit user authorization.
 - [x] 2.1 Implement Edge-owned opaque Task Presence ID assignment and the private `{adapter, native session id, capabilities}` mapping
 - [x] 2.2 Implement absolute-report storage in the semantic core (upsert/end); no event log
 - [x] 2.3 Implement generation/producer-sequence rejection, leases, terminal retention (7-day monotonic TTL + ~200 FIFO), and global acknowledgement/snooze
-- [ ] 2.4 Move Codex lifecycle reduction into `adapters/codex`; map Codex signals to the shared state/reason vocabulary with honest fidelity and no Codex vocabulary in the core
-- [ ] 2.5 Implement the Edge capability router and exact fail-closed Codex focus (resolve via private registry, open only the exact validated thread, no app-open fallback)
-- [ ] 2.6 Implement dual-mode owner-only local IPC (one-shot + leased sessions) with bounded strict frames, owner-only permissions, and no raw-payload logging
-- [ ] 2.7 Keep App Server enrichment Codex-private and Edge-local
+- [x] 2.4 Move Codex lifecycle reduction into `adapters/codex`; map Codex signals to the shared state/reason vocabulary with honest fidelity and no Codex vocabulary in the core
+- [x] 2.5 Implement the Edge capability router and exact fail-closed Codex focus (resolve via private registry, open only the exact validated thread, no app-open fallback)
+- [x] 2.6 Implement dual-mode owner-only local IPC (one-shot + leased sessions) with bounded strict frames, owner-only permissions, and no raw-payload logging
+- [x] 2.7 Keep App Server enrichment Codex-private and Edge-local
 
 ## 3. Phase 3 — Pi and same-machine cross-harness
 
