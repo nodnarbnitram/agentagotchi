@@ -10,5 +10,5 @@ acknowledgement does — it never rewrites the presence to `completed` or
 
 We chose this over acknowledge-only retention (simple, but unbounded state
 after adapter deaths) and over short TTLs (which would delete overnight results
-before the user sees them). The TTL uses monotonic time because HANDOFF forbids
+before the user sees them). The TTL uses monotonic time because the design brief forbids
 wall-clock comparisons for liveness decisions.
