@@ -107,6 +107,38 @@ terminal target also acknowledges it.
 - **WHEN** a Focus Action succeeds on a terminal Task Presence
 - **THEN** that Task Presence is also acknowledged
 
+### Requirement: Dismissal actions acknowledge and snooze
+
+The feed action contract SHALL include two dismissal actions, `acknowledge`
+and `snooze`, sent with the same action frame shape as Device Capability
+actions. They are not per-task capabilities and are never advertised in
+`capabilities[]`; they are Edge-global dismissal controls governed by the
+target's state. `acknowledge` SHALL succeed only on a Terminal Task Presence
+(`ready` or `blocked`) and removes it from every Presence Feed. `snooze`
+SHALL succeed only on a `needs_input` Task Presence and excludes it from the
+Featured Task until its state or reason next changes. Both SHALL publish a
+new presence revision so all surfaces converge, and both SHALL fail closed
+(`stale` for unknown targets, `failed` for wrong-state targets), never
+queued. Browsing or row taps SHALL NOT trigger dismissal.
+
+#### Scenario: Acknowledge removes a terminal presence globally
+
+- **WHEN** an `acknowledge` action targets a Terminal Task Presence
+- **THEN** the origin Edge removes it from every Presence Feed and publishes a
+  new revision
+
+#### Scenario: Snooze sets aside an input-gated presence
+
+- **WHEN** a `snooze` action targets a `needs_input` Task Presence
+- **THEN** it remains in every feed but stops claiming the Featured Task until
+  its state or reason next changes
+
+#### Scenario: Dismissal fails closed on wrong state
+
+- **WHEN** an `acknowledge` targets a non-terminal presence or a `snooze`
+  targets a non-input-gated presence
+- **THEN** the action fails closed and nothing changes
+
 ### Requirement: Focus is the first capability
 
 Focus SHALL be the first Device Capability. A Task Presence SHALL advertise

@@ -6,10 +6,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-#define APP_MAX_TASKS 12
+#define APP_MAX_TASKS 64
 #define APP_TASK_ID_MAX 48
-#define APP_TASK_TITLE_MAX 97
+#define APP_TASK_TITLE_MAX 65
 #define APP_REASON_MAX 16
+#define APP_UPDATED_AT_MAX 40
+#define APP_ORIGIN_KIND_MAX 8
+#define APP_ORIGIN_ID_MAX 64
 
 typedef enum {
     APP_STATE_IDLE = 0,
@@ -25,6 +28,13 @@ typedef struct {
     app_agent_state_t state;
     char reason[APP_REASON_MAX];
     int subagent_count;
+    bool focus_capability;
+    bool snoozed;
+    char updated_at[APP_UPDATED_AT_MAX];
+    uint64_t origin_generation;
+    uint64_t origin_revision;
+    /* The authenticated feed that supplied this winning copy. */
+    int8_t feed_slot;
 } app_task_t;
 
 typedef struct {
@@ -46,7 +56,12 @@ typedef struct {
 } app_sensor_state_t;
 
 typedef struct {
+    /* seq is local merge sequence, not a wire origin revision. */
     uint64_t seq;
+    char origin_kind[APP_ORIGIN_KIND_MAX];
+    char origin_id[APP_ORIGIN_ID_MAX];
+    uint64_t origin_generation;
+    uint64_t origin_revision;
     app_agent_state_t aggregate_state;
     int task_count;
     app_task_t tasks[APP_MAX_TASKS];
@@ -74,6 +89,7 @@ typedef struct {
             bool websocket_connected;
             bool wifi_connected;
             int rssi;
+            int connected_feeds;
         } network;
         struct {
             bool waiting;

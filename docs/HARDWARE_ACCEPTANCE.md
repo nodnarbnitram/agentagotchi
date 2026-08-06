@@ -38,6 +38,14 @@ cell model, bridge version, and test date before running this checklist.
 
 ## Performance and soak
 
+The four-feed TLS/WSS memory, reconnect/power profile and the long-press row
+dismiss gesture are **pending physical validation** on the BOX-3. Do not treat
+the firmware build or host tests as acceptance of those limits or gestures.
+
+- [ ] Four authenticated feed slots remain stable together through reconnects.
+- [ ] Long-pressing a terminal/input-gated row is distinguishable from a row
+      tap and does not dismiss while browsing or scrolling.
+
 - [ ] Pet animation and touch remain smooth with all sensors active.
 - [ ] LVGL sustains the target 30 Hz and no sensor operation stalls it over
       50 ms.

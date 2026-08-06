@@ -280,7 +280,7 @@ func (s *Service) handleFeed(w http.ResponseWriter, r *http.Request) {
 		if err := contract.DecodeStrict(frame, contract.SchemaFeedV1, &action); err != nil {
 			return
 		}
-		result := s.router.Dispatch(r.Context(), action)
+		result := s.dispatchAction(r.Context(), action)
 		if result.Status == "ok" {
 			_, before := s.core.Revision()
 			_ = s.core.Acknowledge(action.TaskPresenceID) // Terminal success also acknowledges.
@@ -294,6 +294,41 @@ func (s *Service) handleFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// dispatchAction routes feed actions: dismissal actions (acknowledge/snooze)
+// are Edge-global controls governed by target state; Device Capabilities go
+// through the fail-closed router. Both fail closed and are never queued.
+func (s *Service) dispatchAction(ctx context.Context, action contract.FeedAction) contract.ActionResult {
+	if contract.IsDismissal(action.Capability) {
+		return s.dispatchDismissal(action)
+	}
+	return s.router.Dispatch(ctx, action)
+}
+
+func (s *Service) dispatchDismissal(action contract.FeedAction) contract.ActionResult {
+	result := contract.ActionResult{
+		Schema: contract.SchemaFeedV1, Type: "action_result", ActionID: action.ActionID,
+	}
+	_, revision := s.core.Revision()
+	if action.ActionID == "" || action.SeenRevision != revision || !s.core.HasTask(action.TaskPresenceID) {
+		result.Status = "stale"
+		return result
+	}
+	var err error
+	switch action.Capability {
+	case contract.CapabilityAcknowledge:
+		err = s.core.Acknowledge(action.TaskPresenceID)
+	case contract.CapabilitySnooze:
+		err = s.core.Snooze(action.TaskPresenceID)
+	}
+	if err != nil {
+		result.Status = "failed"
+		return result
+	}
+	s.signal()
+	result.Status = "ok"
+	return result
 }
 
 func (s *Service) writeSnapshot(conn *ws.Conn) error {

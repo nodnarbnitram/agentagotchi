@@ -98,13 +98,19 @@ func (u *UpstreamClient) connectOnce(ctx context.Context) error {
 			request.Schema != contract.SchemaUpstreamV1 || request.Type != "action_request" {
 			continue
 		}
-		// Reuse the feed router's fail-closed dispatch; SeenRevision maps to
-		// the Edge's current revision contract.
-		result := u.router.Dispatch(ctx, contract.FeedAction{
+		// Dispatch like a direct feed action: dismissal controls (acknowledge/
+		// snooze) are Edge-global; Device Capabilities go through the router.
+		feedAction := contract.FeedAction{
 			Schema: contract.SchemaFeedV1, Type: "action",
 			ActionID: request.ActionID, Capability: request.Capability,
 			TaskPresenceID: request.TaskPresenceID, SeenRevision: request.SeenRevision,
-		})
+		}
+		var result contract.ActionResult
+		if contract.IsDismissal(request.Capability) {
+			result = u.dismiss(feedAction)
+		} else {
+			result = u.router.Dispatch(ctx, feedAction)
+		}
 		result.Schema = contract.SchemaUpstreamV1
 		payload, err := json.Marshal(result)
 		if err != nil {
@@ -114,6 +120,31 @@ func (u *UpstreamClient) connectOnce(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+// dismiss applies a Home-relayed dismissal action against the core.
+func (u *UpstreamClient) dismiss(action contract.FeedAction) contract.ActionResult {
+	result := contract.ActionResult{
+		Schema: contract.SchemaUpstreamV1, Type: "action_result", ActionID: action.ActionID,
+	}
+	_, revision := u.core.Revision()
+	if action.ActionID == "" || action.SeenRevision != revision || !u.core.HasTask(action.TaskPresenceID) {
+		result.Status = "stale"
+		return result
+	}
+	var err error
+	switch action.Capability {
+	case contract.CapabilityAcknowledge:
+		err = u.core.Acknowledge(action.TaskPresenceID)
+	case contract.CapabilitySnooze:
+		err = u.core.Snooze(action.TaskPresenceID)
+	}
+	if err != nil {
+		result.Status = "failed"
+		return result
+	}
+	result.Status = "ok"
+	return result
 }
 
 // NotifySnapshot pushes the current absolute snapshot when connected. Called

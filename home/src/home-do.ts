@@ -230,10 +230,15 @@ export class HomeDurableObject {
       return reply("failed");
     }
     // Fail-closed validation: capability advertised, task currently owned by
-    // an authenticated Edge connection.
+    // an authenticated Edge connection. Dismissal actions (acknowledge/snooze)
+    // are Edge-global controls — never advertised, always forwarded to the
+    // owning Edge, which enforces target-state rules.
+    const DISMISSAL = new Set(["acknowledge", "snooze"]);
     const capabilities = this.presence.capabilitiesOf(action.taskPresenceId);
     if (capabilities === undefined) return reply("stale");
-    if (!capabilities.includes(action.capability)) return reply("unsupported");
+    if (!DISMISSAL.has(action.capability) && !capabilities.includes(action.capability)) {
+      return reply("unsupported");
+    }
     const ownerEdgeId = this.presence.ownerOf(action.taskPresenceId);
     if (ownerEdgeId === undefined) return reply("stale");
     const edgeSocket = this.findEdgeSocket(ownerEdgeId);

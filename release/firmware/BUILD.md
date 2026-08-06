@@ -1,4 +1,4 @@
-# Codex Pet firmware v0.1.0
+# Agentagotchi BOX-3 firmware v0.1.0
 
 This is the directly flashable, sensor-bar-enabled ESP32-S3-BOX-3 build
 preserved from the 2026-07-26 release verification.
@@ -8,7 +8,7 @@ preserved from the 2026-07-26 release verification.
 - Target: `esp32s3`
 - ESP-IDF: `5.5.5`
 - BSP: `espressif/esp-box-3` `3.2.0`
-- Sensor bar: `CONFIG_CODEX_PET_SENSOR_BAR=y`
+- Sensor bar: `CONFIG_AGENTAGOTCHI_SENSOR_BAR=y`
 - TLS allocations: external PSRAM (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y`)
 - App binary: `3,669,520` bytes (`0x37fe10`)
 - App partition: `7,340,032` bytes (`0x700000`)
@@ -17,7 +17,7 @@ preserved from the 2026-07-26 release verification.
 
 `dependencies.lock` preserves every resolved component version and registry
 hash. The exact enabled build and an isolated
-`CONFIG_CODEX_PET_SENSOR_BAR=n` build both completed warning-free. Only the
+`CONFIG_AGENTAGOTCHI_SENSOR_BAR=n` build both completed warning-free. Only the
 shipped, enabled binary is included here.
 
 ## Flash layout
@@ -40,9 +40,9 @@ esptool.py --chip esp32s3 --port /dev/cu.usbmodem... \
   0x10000 codex_pet_box3.bin
 ```
 
-The flashed device still needs its Wi-Fi and bridge credentials. Run
-`codex-pet provision --skip-flash --password-stdin ...` while it is waiting for
-initial USB provisioning.
+The flashed device still needs its Wi-Fi and slot-0 feed credentials. Run
+`agentagotchi provision --skip-flash --password-stdin ...` while it is waiting
+for initial USB provisioning.
 
 This build was flashed to an ESP32-S3-BOX-3 with its SENSOR dock and verified
 on hardware for stable display startup, touch/audio/sensor initialization,

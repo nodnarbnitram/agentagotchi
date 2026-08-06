@@ -39,24 +39,24 @@ install, flash, or provision without explicit user authorization.
 
 ## 5. Phase 5 — Home relay (Workers + Durable Objects) and administration
 
-- [ ] 5.1 Scaffold the Home Worker project (wrangler) with one Durable Object per Home; the Home has a stable identity independent of process/hostname/infrastructure
-- [ ] 5.2 Implement one-Home persistence in Durable Object storage (SQLite): privacy-safe presence model, pairing state, connectivity metadata, role credentials; built-in single-admin bootstrap/login with secure cookie sessions and CSRF protection; pairing credentials are not admin credentials
-- [ ] 5.3 Implement Edge ingress: outbound Edge WSS to the Home Durable Object, absolute snapshots (Edge generation + monotonic revision), per-Edge replacement, and WebSocket hibernation for idle connections
-- [ ] 5.4 Implement reverse action routing to the owning Edge only; Home never reroutes, invents capabilities, or queues
-- [ ] 5.5 Implement Home-to-device Presence Feeds and privacy-safe connectivity/dashboard data (no prompts, transcripts, tool payloads, commands, or filesystem metadata)
-- [ ] 5.6 Build the browser administration client as static assets served by the Home Worker (thin client over shared admin APIs/schemas)
-- [ ] 5.7 Implement full headless Edge CLI management (bootstrap, pairing, status, revocation, recovery)
+- [x] 5.1 Scaffold the Home Worker project (wrangler) with one Durable Object per Home; the Home has a stable identity independent of process/hostname/infrastructure
+- [x] 5.2 Implement one-Home persistence in Durable Object storage (SQLite): privacy-safe presence model, pairing state, connectivity metadata, role credentials; built-in single-admin bootstrap/login with secure cookie sessions and CSRF protection; pairing credentials are not admin credentials
+- [x] 5.3 Implement Edge ingress: outbound Edge WSS to the Home Durable Object, absolute snapshots (Edge generation + monotonic revision), per-Edge replacement, and WebSocket hibernation for idle connections
+- [x] 5.4 Implement reverse action routing to the owning Edge only; Home never reroutes, invents capabilities, or queues
+- [x] 5.5 Implement Home-to-device Presence Feeds and privacy-safe connectivity/dashboard data (no prompts, transcripts, tool payloads, commands, or filesystem metadata)
+- [x] 5.6 Build the browser administration client as static assets served by the Home Worker (thin client over shared admin APIs/schemas)
+- [x] 5.7 Implement full headless Edge CLI management (bootstrap, pairing, status, revocation, recovery)
 - [ ] 5.8 Build the optional Native SDK Edge administration client against the same admin contract (share domain rules/schemas/design, not rendering components)
 
 ## 6. Phase 6 — Remote acceptance and hardening
 
 - [ ] 6.1 Run a local Edge paired to Home while local Codex/Pi also reaches BOX-3 directly; verify BOX-3 shows the union of direct and Home-relayed presence and that duplicate Task Presences converge by origin revision
 - [ ] 6.2 Exercise failure modes: Home loss (direct local still works), direct Edge loss (Home-relayed still works), adapter death, reconnect, stale replay, duplicate delivery, revocation, and uncertain action retries (fail closed, never queued, deduplicated)
-- [ ] 6.3 Threat-model pairing, Home internet exposure, task routing, admin sessions, and privacy-safe persistence/logging
-- [ ] 6.4 Verify the privacy invariant end-to-end: no prompt, command, tool payload, transcript, full path, credential, token, private key, or Wi-Fi secret appears in logs, persistence, or status wires
+- [x] 6.3 Threat-model pairing, Home internet exposure, task routing, admin sessions, and privacy-safe persistence/logging
+- [x] 6.4 Verify the privacy invariant end-to-end: no prompt, command, tool payload, transcript, full path, credential, token, private key, or Wi-Fi secret appears in logs, persistence, or status wires
 - [ ] 6.5 Complete release and physical hardware acceptance documentation (`docs/RELEASE_VERIFICATION.md`, `docs/HARDWARE_ACCEPTANCE.md`)
 
 ## 7. Deferred (do not implement in this change)
 
-- [ ] 7.1 Confirm Claude adapter, approve/deny/respond, microphone/STT, Pi/terminal focus, pet customization, Edge-to-Edge/Home-to-Home relay, multi-tenancy, per-device dismissal, time-based snooze resurface, and legacy compatibility remain deferred and do not leak into the rebuild
-- [ ] 7.2 Confirm the VPS Edge remote scenario (Pi on a VPS relaying through Home, VPS deployment validation, and VPS-specific hardening) is deferred to a follow-up change; this change validates Home with local Edges only
+- [x] 7.1 Confirm Claude adapter, approve/deny/respond, microphone/STT, Pi/terminal focus, pet customization, Edge-to-Edge/Home-to-Home relay, multi-tenancy, per-device dismissal, time-based snooze resurface, and legacy compatibility remain deferred and do not leak into the rebuild
+- [x] 7.2 Confirm the VPS Edge remote scenario (Pi on a VPS relaying through Home, VPS deployment validation, and VPS-specific hardening) is deferred to a follow-up change; this change validates Home with local Edges only

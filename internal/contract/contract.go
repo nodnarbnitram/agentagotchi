@@ -32,11 +32,22 @@ const (
 	SchemaAdminV1    = "agentagotchi.admin.v1"
 )
 
-// Capability is an allowlisted Device Capability name. focus is the only
-// capability in this protocol version.
+// Capability is an allowlisted control-plane name. focus is the only Device
+// Capability in this protocol version; acknowledge and snooze are dismissal
+// actions (never advertised in capabilities[]).
 type Capability string
 
-const CapabilityFocus Capability = "focus"
+const (
+	CapabilityFocus       Capability = "focus"
+	CapabilityAcknowledge Capability = "acknowledge"
+	CapabilitySnooze      Capability = "snooze"
+)
+
+// IsDismissal reports whether the capability is a dismissal action rather
+// than an advertised Device Capability.
+func IsDismissal(c Capability) bool {
+	return c == CapabilityAcknowledge || c == CapabilitySnooze
+}
 
 // FeedTask is the wire form of one Task Presence. It has no field that could
 // carry a native session ID, path, prompt, transcript, command, or tool

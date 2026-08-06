@@ -58,7 +58,10 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192", defaults)
         self.assertIn("CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y", defaults)
         self.assertIn("static app_ui_event_t event", main)
-        self.assertIn("#define APP_TASK_TITLE_MAX 97", state)
+        self.assertIn("#define APP_MAX_TASKS 64", state)
+        self.assertIn("#define APP_TASK_TITLE_MAX 65", state)
+        settings = (ROOT / "firmware/main/app_settings.h").read_text(encoding="utf-8")
+        self.assertIn("#define APP_MAX_FEED_SLOTS 4", settings)
         self.assertIn("xQueueCreateStatic(", main)
         self.assertIn("MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT", main)
         self.assertNotIn("app_ui_event_t discarded;", main)
@@ -102,10 +105,12 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("discovered_ipv4(", network)
         self.assertIn("IP2STR(&address->addr.u_addr.ip4)", network)
         self.assertIn(
-            ".cert_common_name = context->settings.bridge_host",
+            ".cert_common_name = pairing->host",
             network,
         )
         self.assertIn("#define WS_RX_MAX 8192", network)
+        self.assertIn('"wss://%s:%d/feed/v1"', network)
+        self.assertIn("agentagotchi.feed.v1", network)
         for source in (audio, sensors, network):
             self.assertIn("xTaskCreatePinnedToCoreWithCaps(", source)
             self.assertIn("MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT", source)
