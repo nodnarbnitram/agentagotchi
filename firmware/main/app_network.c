@@ -62,7 +62,11 @@ struct network_context {
     EventGroupHandle_t wifi_events;
     QueueHandle_t focus_queue;
     SemaphoreHandle_t merge_lock;
-    feed_slot_context_t slots[APP_MAX_FEED_SLOTS];
+    /* Four slots embed ~88 KB of receive buffers and per-feed snapshots, which
+     * overflows internal DRAM when placed in .bss. The array is allocated from
+     * PSRAM in app_network_start (with an internal-RAM fallback).
+     * Array indexing through this pointer keeps every access site unchanged. */
+    feed_slot_context_t *slots;
     app_snapshot_t merged_snapshot;
     app_ui_event_t snapshot_event;
     uint64_t merge_sequence;
@@ -621,6 +625,18 @@ esp_err_t app_network_start(const app_settings_t *settings)
     memset(&s_network, 0, sizeof(s_network));
     atomic_store(&s_wall_clock_valid, false);
     s_network.settings = settings;
+    s_network.slots = heap_caps_malloc(
+        APP_MAX_FEED_SLOTS * sizeof(feed_slot_context_t),
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_network.slots == NULL) {
+        s_network.slots = heap_caps_malloc(
+            APP_MAX_FEED_SLOTS * sizeof(feed_slot_context_t),
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (s_network.slots == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    memset(s_network.slots, 0, APP_MAX_FEED_SLOTS * sizeof(feed_slot_context_t));
     s_network.wifi_events = xEventGroupCreate();
     s_network.focus_queue = xQueueCreate(8, sizeof(focus_request_t));
     s_network.merge_lock = xSemaphoreCreateMutex();
