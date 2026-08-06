@@ -412,9 +412,14 @@ static bool discovered_ipv4(
 
 static void discover_bridge(char *host, size_t host_capacity, int *port)
 {
+    /* mDNS is only used for one-shot bridge discovery; its task/PCB/buffers
+     * cost ~16 KB of internal RAM, which the four-feed budget cannot hold
+     * permanently alongside Wi-Fi and the websocket client. Free it after
+     * every query and re-init on the next reconnect. */
     mdns_result_t *results = NULL;
     if (mdns_init() != ESP_OK ||
         mdns_query_ptr("_agentagotchi", "_tcp", 2500, 4, &results) != ESP_OK) {
+        (void)mdns_free();
         return;
     }
     for (mdns_result_t *result = results; result != NULL; result = result->next) {
@@ -433,6 +438,7 @@ static void discover_bridge(char *host, size_t host_capacity, int *port)
         break;
     }
     mdns_query_results_free(results);
+    (void)mdns_free();
 }
 
 static esp_err_t start_websocket(network_context_t *context, int index)
@@ -471,7 +477,7 @@ static esp_err_t start_websocket(network_context_t *context, int index)
          * certificate against the provisioned feed identity. */
         .cert_common_name = pairing->host,
         .skip_cert_common_name_check = false,
-        .buffer_size = 4096,
+        .buffer_size = 2048,
         .network_timeout_ms = 10000,
         .reconnect_timeout_ms = 3000,
         .ping_interval_sec = 15,
@@ -480,11 +486,17 @@ static esp_err_t start_websocket(network_context_t *context, int index)
         .keep_alive_idle = 15,
         .keep_alive_interval = 5,
         .keep_alive_count = 3,
-        .task_stack = 7168,
+        .task_stack = 6144,
         .task_prio = 5,
     };
     slot->websocket = esp_websocket_client_init(&websocket_config);
     if (slot->websocket == NULL) {
+        ESP_LOGW(
+            TAG,
+            "websocket init failed: internal heap=%u (largest %u), spiram=%u",
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         return ESP_ERR_NO_MEM;
     }
     esp_err_t err = esp_websocket_register_events(
@@ -496,6 +508,13 @@ static esp_err_t start_websocket(network_context_t *context, int index)
         err = esp_websocket_client_start(slot->websocket);
     }
     if (err != ESP_OK) {
+        ESP_LOGW(
+            TAG,
+            "feed slot %d start failed (%s): internal heap=%u (largest %u)",
+            index,
+            esp_err_to_name(err),
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         (void)esp_websocket_client_destroy(slot->websocket);
         slot->websocket = NULL;
     }
@@ -654,6 +673,12 @@ esp_err_t app_network_start(const app_settings_t *settings)
         s_network.slots[i].index = i;
     }
 
+    ESP_LOGI(
+        TAG,
+        "network start: internal heap=%u (largest %u), spiram heap=%u",
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "init netif");
     esp_err_t event_loop_err = esp_event_loop_create_default();
     if (event_loop_err != ESP_OK && event_loop_err != ESP_ERR_INVALID_STATE) {
@@ -687,6 +712,11 @@ esp_err_t app_network_start(const app_settings_t *settings)
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "set Wi-Fi mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wifi_config), TAG, "set Wi-Fi config");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start Wi-Fi");
+    ESP_LOGI(
+        TAG,
+        "wifi started: internal heap=%u (largest %u)",
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 
     /* Task stacks must be internal RAM (Xtensa context switch). */
     if (xTaskCreatePinnedToCore(
@@ -697,6 +727,11 @@ esp_err_t app_network_start(const app_settings_t *settings)
             5,
             NULL,
             0) != pdPASS) {
+        ESP_LOGE(
+            TAG,
+            "network task stack alloc failed: internal heap=%u (largest %u)",
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

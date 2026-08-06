@@ -81,3 +81,44 @@ has NOT been validated on physical hardware. Before release, run and record:
    loss (Home relay keeps working), adapter death, revocation disconnect.
 
 Record results here from real-kit runs only — never from compilation.
+
+---
+
+## Physical validation run — 2026-08-06 (single feed, multi-feed slot provisioning pending)
+
+Kit: ESP32-S3-BOX-3 (USB Serial/JTAG `/dev/cu.usbmodem2112301`), ESP-IDF v5.5.1,
+firmware commit `d81d3c7`+uncommitted network fixes, Edge v0.2.0 on macOS
+(wss://brandons-macbook-pro-2.local:8787/feed/v1).
+
+Real-hardware defects found and fixed this run (all committed):
+
+1. `app_ui_event_t` union (~10KB `app_snapshot_t`) built on task stacks →
+   `pet_sensors` stack overflow at boot. Fixed: single-task static storage at
+   all three producer sites (`post_state`, `post_network_state` ×2).
+2. `pet_sensors`/`pet_audio`/`pet_network` stacks allocated with
+   `MALLOC_CAP_SPIRAM` — invalid for Xtensa context switching. Fixed: internal
+   RAM stacks (`xTaskCreatePinnedToCore`). Release contract now asserts this.
+3. LVGL draw buffer in PSRAM broke ILI9341 DMA flush (`wait_for_flushing`
+   spun, task watchdog starved IDLE0). Fixed: draw buffer stays DMA-internal;
+   `BSP_LCD_DRAW_BUF_HEIGHT` 100→40 (64→25.6KB), LVGL pool 64→40KB.
+4. LVGL object pool exhausted by 64 tray rows × 3 widgets →
+   `lv_label_create` NULL → crash in `make_label`. Fixed: tray virtualized to
+   `APP_UI_MAX_ROWS=16` over the priority-sorted 64-task model.
+5. Wi-Fi driver + mDNS + websocket client overran internal heap
+   (`ESP_ERR_NO_MEM` in `app_network_start`, then `Error create websocket
+   task` with internal heap at ~1.3KB). Fixed: Wi-Fi static/dynamic buffer
+   trim, mDNS freed after each discovery query (`mdns_free`), websocket task
+   7168→6144, transport buffer 4096→2048.
+
+Observed PASS:
+- Clean boot, no crash/watchdog for 60s+ across repeated resets.
+- Provisioning via `scripts/provision-from-env.sh` (AGOT_PROVISION, slot 0).
+- Wi-Fi join, mDNS bridge discovery, WSS connect + authenticate to the Edge
+  (`websocket_client: Started`; Edge admin `connected: 1`).
+- Codex hook → Edge → BOX-3 feed path: Edge shows `needs_input`, 1 presence,
+  1 connected peer. (Device rendered the presence; serial log stays quiet by
+  design.)
+
+Pending (needs the multi-feed slot provisioning flow — firmware currently
+provisions slot 0 only by design): four concurrent feeds, duplicate
+direct/relayed convergence, resource limits under 4 live feeds.

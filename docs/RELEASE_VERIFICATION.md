@@ -90,7 +90,8 @@ behavior under four live feeds remains pending physical acceptance.
 | Step | Owner | Blocking |
 | --- | --- | --- |
 | ESP-IDF 5.5.x `idf.py -C firmware build` (rename + multi-feed changes) | ~~operator with IDF~~ **DONE 2026-08-05** | no |
-| Four-feed physical resource/interaction acceptance on BOX-3 | operator with kit | yes (task 4.6) |
+| Single-feed physical boot/feed/interaction acceptance on BOX-3 | ~~operator with kit~~ **PARTIAL 2026-08-06** | boot+feed done; interaction pending |
+| Multi-feed (4-slot) physical acceptance — needs slot 1-3 provisioning flow | follow-up change | yes |
 | `release/firmware/` bundle refresh (binaries, lock, hashes, BUILD.md together) | operator with IDF | yes, before release |
 | Four-feed resource limits + interaction acceptance on BOX-3 | operator with kit | yes (task 4.6) |
 | Local Edge→Home acceptance with BOX-3 (direct + relayed convergence) | operator with kit + deployed Home | yes (task 6.1) |
