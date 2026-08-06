@@ -21,6 +21,7 @@ import (
 	"agentagotchi.local/agentagotchi/internal/adapters/codex/appserver"
 	"agentagotchi.local/agentagotchi/internal/config"
 	"agentagotchi.local/agentagotchi/internal/contract"
+	"agentagotchi.local/agentagotchi/internal/pairing"
 	"agentagotchi.local/agentagotchi/internal/presence"
 	"agentagotchi.local/agentagotchi/internal/ws"
 )
@@ -44,12 +45,28 @@ type FeedAuthenticator interface {
 
 type BearerFeedAuthenticator struct{ Token string }
 
+func BearerToken(r *http.Request) string {
+	const prefix = "bearer "
+	h := r.Header.Get("Authorization")
+	if len(h) < len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
+		return ""
+	}
+	return strings.TrimSpace(h[len(prefix):])
+}
+
 func (a BearerFeedAuthenticator) Authenticate(r *http.Request) bool {
 	return tokenEqual(bearerToken(r.Header.Get("Authorization")), a.Token)
 }
 
+// Version is the Edge service version reported on the admin surface.
+const Version = "0.2.0"
+
 type Service struct {
 	id               config.Identity
+	ceremony         *pairing.Ceremony
+	credStore        *pairing.Store
+	version          string
+	startedAt        time.Time
 	edgeID           string
 	statePath        string
 	socketPath       string
@@ -94,15 +111,13 @@ func NewService(opts Options) (*Service, error) {
 		return nil, err
 	}
 	authenticator := opts.FeedAuthenticator
-	if authenticator == nil {
-		authenticator = BearerFeedAuthenticator{Token: id.Token}
-	}
 	leaseDuration := opts.PresenceConfig.LeaseDuration
 	if leaseDuration <= 0 {
 		leaseDuration = 30 * time.Second
 	}
 	s := &Service{
 		id: id, edgeID: edgeIDFromCertificate(id.CertPath),
+		version: Version, startedAt: time.Now().UTC(),
 		statePath: statePath, socketPath: filepath.Join(opts.DataDir, "edge.sock"),
 		core: core, codexReducer: codex.NewReducer(), codexLease: codexLease,
 		leaseDuration: leaseDuration, authenticator: authenticator,
@@ -111,6 +126,13 @@ func NewService(opts Options) (*Service, error) {
 		disableAppServer: opts.DisableAppServer,
 	}
 	s.router = NewRouter(core)
+	if err := s.initPairing(); err != nil {
+		return nil, err
+	}
+	if authenticator == nil {
+		authenticator = PairingFeedAuthenticator{LegacyToken: id.Token, Ceremony: s.ceremony}
+	}
+	s.authenticator = authenticator
 	focus := codex.FocusHandler(opts.FocusRunner)
 	s.router.Register("codex", contract.CapabilityFocus, func(_ context.Context, nativeID string, _ contract.FeedAction) error {
 		return focus(nativeID)
@@ -231,7 +253,7 @@ func (s *Service) handleFeed(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	s.hub.add(conn)
+	s.hub.add(conn, BearerToken(r))
 	defer s.hub.remove(conn)
 	if err := s.writeSnapshot(conn); err != nil {
 		return
@@ -368,15 +390,15 @@ func tokenEqual(a, b string) bool {
 
 type feedHub struct {
 	mu      sync.RWMutex
-	clients map[*ws.Conn]struct{}
+	clients map[*ws.Conn]string // conn -> presented bearer token
 }
 
-func newFeedHub() *feedHub { return &feedHub{clients: make(map[*ws.Conn]struct{})} }
+func newFeedHub() *feedHub { return &feedHub{clients: make(map[*ws.Conn]string)} }
 
-func (h *feedHub) add(conn *ws.Conn) {
+func (h *feedHub) add(conn *ws.Conn, token string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[conn] = struct{}{}
+	h.clients[conn] = token
 }
 
 func (h *feedHub) remove(conn *ws.Conn) {
@@ -384,6 +406,19 @@ func (h *feedHub) remove(conn *ws.Conn) {
 	defer h.mu.Unlock()
 	delete(h.clients, conn)
 	_ = conn.Close()
+}
+
+// dropToken disconnects every connection authenticated with token (used on
+// credential revocation).
+func (h *feedHub) dropToken(token string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for conn, presented := range h.clients {
+		if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1 {
+			delete(h.clients, conn)
+			_ = conn.Close()
+		}
+	}
 }
 
 func (h *feedHub) snapshot() []*ws.Conn {

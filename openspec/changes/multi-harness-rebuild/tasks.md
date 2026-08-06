@@ -30,8 +30,8 @@ install, flash, or provision without explicit user authorization.
 
 ## 4. Phase 4 — Pairing, feeds, and BOX-3 multi-source UI
 
-- [ ] 4.1 Implement the device-code Pairing Ceremony with unique, role-scoped, individually revocable credentials (Edge→device, Edge→Home, Home→device); one-use short-lived codes; owner-only credential storage
-- [ ] 4.2 Implement complete-replacement Presence Feed snapshots on the Edge/Home→device contract with fail-closed schema identification
+- [x] 4.1 Implement the device-code Pairing Ceremony with unique, role-scoped, individually revocable credentials (Edge→device, Edge→Home, Home→device); one-use short-lived codes; owner-only credential storage
+- [x] 4.2 Implement complete-replacement Presence Feed snapshots on the Edge/Home→device contract with fail-closed schema identification
 - [ ] 4.3 Add up to four concurrent authenticated WSS feed connections to firmware with per-pairing snapshot merge by Task Presence ID/origin revision
 - [ ] 4.4 Implement the larger scrollable task list, Featured Task behavior, FIFO priority (`needs_input > blocked > ready > running > idle`) with preemption and manual override, and pet-tap Focus (only when advertised); browsing/row taps never act on the host
 - [ ] 4.5 Implement acknowledge/snooze dismiss gestures (terminal→acknowledge, input-gated→snooze); browsing/row taps never dismiss

@@ -17,13 +17,13 @@
       "id": "6",
       "subject": "Phase 2: Edge Bridge + Codex adapter (tasks 2.1–2.7)",
       "description": "Task Presence ID assignment + private mapping (2.1), absolute-report storage (2.2), generation/seq rejection + leases + retention + ack/snooze (2.3), Codex lifecycle reduction in adapters/codex (2.4), capability router + fail-closed Codex focus (2.5), dual-mode owner-only IPC (2.6), App Server enrichment Codex-private (2.7).",
-      "status": "in_progress",
+      "status": "completed",
       "activeForm": "Implementing Edge Bridge and Codex adapter",
       "metadata": {},
       "blocks": [],
       "blockedBy": [],
       "createdAt": 1785973626688,
-      "updatedAt": 1785974142040
+      "updatedAt": 1785976043380
     },
     {
       "id": "7",
@@ -41,13 +41,13 @@
       "id": "8",
       "subject": "Phase 4: Pairing, feeds, BOX-3 firmware (tasks 4.1–4.6)",
       "description": "Device-code pairing ceremony with revocable role-scoped credentials (4.1), complete-replacement feed snapshots (4.2), four concurrent WSS feeds in firmware (4.3), scrollable list + Featured Task + FIFO + pet-tap Focus (4.4), acknowledge/snooze gestures (4.5), physical hardware validation — USER REQUIRED (4.6).",
-      "status": "pending",
+      "status": "in_progress",
       "activeForm": "Implementing pairing, feeds, and firmware",
       "metadata": {},
       "blocks": [],
       "blockedBy": [],
       "createdAt": 1785973626690,
-      "updatedAt": 1785973626690
+      "updatedAt": 1785976043381
     },
     {
       "id": "9",

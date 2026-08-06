@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"agentagotchi.local/agentagotchi/internal/adapters/codex"
 	"agentagotchi.local/agentagotchi/internal/config"
 	"agentagotchi.local/agentagotchi/internal/edge"
+	"agentagotchi.local/agentagotchi/internal/pairing"
 	"agentagotchi.local/agentagotchi/internal/provision"
 )
 
@@ -39,6 +41,8 @@ func run(args []string) error {
 		return runServe(args[1:])
 	case "hook":
 		return runHook(args[1:])
+	case "pair":
+		return runPair(args[1:])
 	case "provision":
 		return runProvision(args[1:])
 	case "version", "--version", "-version":
@@ -134,8 +138,83 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `Usage: agentagotchi <command> [options]
 
 Commands:
-  serve       Run the macOS bridge
+  serve       Run the Edge Bridge
   hook        Receive one Codex hook event from stdin
+  pair        Manage the Pairing Ceremony (begin/approve/deny/list/revoke/redeem)
   provision   Build, flash, and provision the BOX-3
-  version     Print the bridge version`)
+  version     Print the Edge version`)
+}
+
+// runPair drives the owner-only administration IPC for the Pairing Ceremony.
+// Credential tokens print only on explicit redeem, on the connecting client's
+// own invocation — never in list/status output.
+func runPair(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("pair requires a subcommand: begin|approve|deny|list|pending|revoke|redeem")
+	}
+	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
+	dataDir := fs.String("data-dir", config.DefaultDataDir(), "Edge data directory")
+	role := fs.String("role", "feed", "pairing role: feed|edge-ingress")
+	clientName := fs.String("client", "", "connecting client name")
+	codeID := fs.String("code", "", "pairing code ID")
+	credentialID := fs.String("credential", "", "credential ID")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	socket := filepath.Join(*dataDir, "edge.sock")
+	sub := args[0]
+	request := map[string]string{"schema": "agentagotchi.admin.v1", "type": "pairing_" + sub}
+	switch sub {
+	case "begin":
+		request["role"], request["clientName"] = *role, *clientName
+	case "approve", "deny":
+		request["codeId"] = *codeID
+	case "revoke":
+		request["credentialId"] = *credentialID
+	case "list", "pending":
+	default:
+		return fmt.Errorf("unknown pair subcommand %q", sub)
+	}
+	conn, err := net.DialTimeout("unix", socket, time.Second)
+	if err != nil {
+		return fmt.Errorf("Edge IPC: %w (is 'agentagotchi serve' running?)", err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		return err
+	}
+	var reply struct {
+		OK          bool                 `json:"ok"`
+		Error       string               `json:"error"`
+		Code        *pairing.Code        `json:"code"`
+		Pending     []pairing.Code       `json:"pending"`
+		Credentials []pairing.Credential `json:"credentials"`
+	}
+	if err := json.NewDecoder(conn).Decode(&reply); err != nil {
+		return err
+	}
+	if !reply.OK {
+		return fmt.Errorf("%s", reply.Error)
+	}
+	switch sub {
+	case "begin":
+		fmt.Printf("Pairing code for %s: %s\n", reply.Code.ClientName, reply.Code.Token)
+		fmt.Printf("Code ID %s, expires %s\n", reply.Code.ID, reply.Code.ExpiresAt.Format(time.RFC3339))
+	case "pending":
+		for _, code := range reply.Pending {
+			fmt.Printf("%s  role=%s client=%s expires=%s\n", code.ID, code.Role, code.ClientName, code.ExpiresAt.Format(time.RFC3339))
+		}
+	case "list":
+		for _, cred := range reply.Credentials {
+			state := "active"
+			if cred.Revoked {
+				state = "revoked"
+			}
+			fmt.Printf("%s  role=%s client=%s issued=%s %s\n", cred.ID, cred.Role, cred.ClientName, cred.IssuedAt.Format(time.RFC3339), state)
+		}
+	default:
+		fmt.Println("ok")
+	}
+	return nil
 }

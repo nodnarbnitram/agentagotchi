@@ -47,7 +47,7 @@ func decodeIPCEnvelope(frame []byte) (ipcEnvelope, error) {
 	if err := json.Unmarshal(frame, &envelope); err != nil {
 		return envelope, errors.New("invalid IPC JSON")
 	}
-	if envelope.Schema != contract.SchemaIPCV1 {
+	if envelope.Schema != contract.SchemaIPCV1 && envelope.Schema != contract.SchemaAdminV1 {
 		return envelope, fmt.Errorf("wrong IPC schema")
 	}
 	return envelope, nil
@@ -115,6 +115,10 @@ func (s *Service) handleIPCConnection(conn net.Conn) {
 	}
 	envelope, err := decodeIPCEnvelope(frame)
 	if err != nil {
+		return
+	}
+	if envelope.Schema == contract.SchemaAdminV1 {
+		s.handleAdmin(conn, frame)
 		return
 	}
 	switch envelope.Type {
