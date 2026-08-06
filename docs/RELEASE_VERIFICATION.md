@@ -36,11 +36,55 @@ All of the following run under `make test` (plus `node test/run-tests.mjs` in
 | Release contracts (firmware pins, launch agent, sensor build) | `tools/test_release_contracts.py` |
 | Firmware sensor math (host-compiled) | `firmware/tests/test_sensor_math.c` |
 
+## Local Edge→Home acceptance (wrangler dev) — 2026-08-05
+
+This was the software-path run only. Everything ran on loopback; no
+`wrangler deploy`, cloud resource, external write, BOX-3, or physical feed was
+used. Redacted frames and logs are in `work/e2e-2026-08-05/`.
+
+| Check | Result | Commands / evidence |
+| --- | --- | --- |
+| Home install and local Worker + Durable Object startup | **PASS** | `(cd home && npm install)`; `(cd home && npx wrangler dev --port 18901)`; `home-wrangler.log` shows `Ready on http://localhost:18901`; admin/DO routes returned 200/101. |
+| Admin bootstrap, login, cookie, and CSRF | **PASS** (with local eviction caveat below) | `curl -X POST /admin/bootstrap`; `curl -X POST /admin/login`; `curl GET /admin/api/status`; `admin-bootstrap-login.txt`. |
+| Edge-ingress Pairing Ceremony and credential redaction | **PASS** | `curl -X POST /pairing/code`, `GET /admin/api/pairing/pending`, `POST /admin/api/pairing/approve`, `POST /pairing/redeem`, `GET /admin/api/pairing/list`, `GET /admin/api/status`; `pair-edge-*.json`, `pairing-list-final-safe.json`. Credential token appeared only in the redeem response and was absent from list/status. |
+| Feed Pairing Ceremony, role scope, and one-use code | **PASS** | The same pairing commands with role `feed`; replay `POST /pairing/redeem` returned 403; `pair-feed-*.json` and `pair-feed-replay.txt`. |
+| Loopback `ws://` Edge upstream allowance, with non-loopback rejection | **PASS** | Added `internal/edge/upstream_dial_test.go`; `GOCACHE=$(pwd)/work/gocache go test ./internal/edge -run 'TestDialWSS|TestIsLoopbackHost' -count=1` passed. `wss://` remains the remote-only path. |
+| Edge paired to Home and Home status shows a connected Edge | **PASS** | `go run ./cmd/agentagotchi serve --data-dir /tmp/agot-e2e.XXX --home-url ws://127.0.0.1:18901/edge/v1 --home-token <redeemed-credential>`; `go run ./cmd/agentagotchi status`; `home-status-edge-fresh.json` / `home-status-terminal-ready.json`. |
+| Hook-originated ready/completed presence relayed to Home | **PASS** | `printf '<SessionStart JSON>' | go run ./cmd/agentagotchi hook --data-dir /tmp/agot-e2e.XXX`, followed by a `Stop` payload; `home-status-terminal-ready.json` contains only `agentagotchi.feed.v1` allowlisted fields. |
+| Privacy scan of captured feed/upstream frames and Home/Edge logs | **PASS** | `grep -RFn` for the native session UUID, `/Users/x/secret-project`, and prompt marker across `feed-frames*.jsonl`, `*-frame.json`, `home-wrangler.log`, and `edge.log` returned no matches. |
+| Home feed snapshot and allowlisted task projection | **PASS** | Node `ws` client from `home/node_modules/ws` connected to `ws://127.0.0.1:18901/feed/v1`; `feed-frames.jsonl` received `schema: agentagotchi.feed.v1`, terminal task, and only allowlisted task keys. |
+| Exact prescribed reverse dismissal (`seenRevision` copied from Home feed) | **FAIL** | Node feed client sent `e2e-1` with `capability: acknowledge` and the snapshot revision; `feed-frames.jsonl` received `status: stale` with `schema: agentagotchi.upstream.v1`, not the feed schema, and no replacement snapshot. The Home feed revision and Edge origin revision are not aligned for this route. |
+| Reverse route and Edge-global dismissal with the Edge revision | **PASS** (diagnostic only) | A follow-up Node client sent `e2e-2` with the current Edge revision; it received `action_result: ok` (still incorrectly tagged `agentagotchi.upstream.v1`), and `go run ./cmd/agentagotchi status` showed zero local tasks. This does not clear the exact prescribed-action failure above; Home still emitted no fresh snapshot. |
+| Revocation and direct-feed independence | **PASS / FAIL** | `POST /admin/api/pairing/revoke`, then `grep 'GET /edge/v1 401 Unauthorized' home-wrangler.log` and `GET /admin/api/status`: Home had no Edge or relayed tasks (`home-status-after-revocation.json`). The local Edge status/direct WSS feed remained available (`edge-status-after-revocation.txt`, `direct-edge-feed-frame.json`). **FAIL:** the current Edge logger emits no reconnect/auth-failure line (`revocation-log-observation.txt`); the Home-side 401 proves the revoked reconnect was rejected. |
+| Go/Home automated checks after the run | **PASS / FAIL** | `GOCACHE=$(pwd)/work/gocache go test ./...`, `go vet ./...`, `npm test`, and `npm run types` passed. The first post-change `make test` passed; a later repeat was blocked by a concurrent/unrelated `firmware/dependencies.lock` change to IDF `5.5.1` while the release check requires `5.5.5`. |
+
+During the run, local DO execution evicted the in-memory admin session after
+some persistence operations; re-login was required before subsequent admin
+calls. Admin password/CSRF/cookies stayed owner-readable under `/tmp` and were
+not placed in evidence. This local session-continuity issue, plus the exact
+reverse-action failures above, remains for implementation follow-up.
+
+**Physical BOX-3 direct-feed validation remains pending. Task 6.1 stays open:**
+the software path did not validate the physical device's direct + Home-relayed
+union, duplicate convergence by origin revision, or four-feed behavior.
+
+## Firmware build validation — 2026-08-05 (ESP-IDF v5.5.1)
+
+`idf.py -C firmware build` on the four-feed rework: **clean build, 0
+warnings**. Found and fixed one real resource-limit defect before flash:
+`dram0_0_seg` overflowed by 37,688 B (4x feed slots embedded ~88 KB of RX
+buffers + per-feed snapshots in static `.bss`). Fix: per-slot array allocated
+from PSRAM heap (`f5034d3`). Headroom after fix: DIRAM 291,375/341,760 B
+used (85.26%, 50,385 B free), IRAM 100% (code, unchanged), app partition
+50% free. This validates compile-time resource limits only; on-device
+behavior under four live feeds remains pending physical acceptance.
+
 ## Pending physical/operator steps
 
 | Step | Owner | Blocking |
 | --- | --- | --- |
-| ESP-IDF 5.5.x `idf.py -C firmware build` (rename + multi-feed changes) | operator with IDF | yes, before flash |
+| ESP-IDF 5.5.x `idf.py -C firmware build` (rename + multi-feed changes) | ~~operator with IDF~~ **DONE 2026-08-05** | no |
+| Four-feed physical resource/interaction acceptance on BOX-3 | operator with kit | yes (task 4.6) |
 | `release/firmware/` bundle refresh (binaries, lock, hashes, BUILD.md together) | operator with IDF | yes, before release |
 | Four-feed resource limits + interaction acceptance on BOX-3 | operator with kit | yes (task 4.6) |
 | Local Edge→Home acceptance with BOX-3 (direct + relayed convergence) | operator with kit + deployed Home | yes (task 6.1) |
