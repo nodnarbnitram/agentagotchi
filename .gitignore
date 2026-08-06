@@ -13,3 +13,8 @@ __pycache__/
 *.log
 /clients/macos-admin/.build/
 /packages/home/.wrangler/
+
+# Local-only: openspec change working state and pi session/agent artifacts
+.openspec*
+openspec/
+.pi/
