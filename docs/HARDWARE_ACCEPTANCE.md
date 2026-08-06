@@ -61,3 +61,23 @@ If hardware testing finds an unresolved UI or stability regression, rebuild with
 Before release, also compile once with `CONFIG_AGENTAGOTCHI_SENSOR_BAR=n` to verify
 that the fallback remains buildable. This compile is a switch-integrity check,
 not a substitute for running the shipped, enabled configuration.
+
+---
+
+## Multi-harness rebuild — pending runs (2026-08-05)
+
+The rebuilt firmware (four feed pairings, scrollable list, dismiss gestures)
+has NOT been validated on physical hardware. Before release, run and record:
+
+1. ESP-IDF 5.5.x `idf.py -C firmware build` warning-free with both
+   `CONFIG_AGENTAGOTCHI_SENSOR_BAR=y` and `=n`.
+2. Four concurrent WSS feeds (two Edges + one Home relay + one spare slot):
+   memory headroom, reconnect behavior, merge convergence by origin revision.
+3. Interaction acceptance: scrollable list bounds, featured-task preemption,
+   manual override/re-tap release, pet-tap Focus only when advertised,
+   long-press dismiss (terminal→acknowledge, needs_input→snooze), browsing
+   never acts on the host.
+4. Failure modes on kit: Home loss (direct Edge keeps working), direct Edge
+   loss (Home relay keeps working), adapter death, revocation disconnect.
+
+Record results here from real-kit runs only — never from compilation.
