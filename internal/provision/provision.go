@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"codexpet.local/codex-pet/internal/config"
+	"agentagotchi.local/agentagotchi/internal/config"
 )
 
 type Options struct {
@@ -87,7 +87,7 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	line := append([]byte("CODEX_PET_PROVISION "), payload...)
+	line := append([]byte("AGOT_PROVISION "), payload...)
 	line = append(line, '\r', '\n')
 	if err := configureSerial(opts.SerialPort); err != nil {
 		return err

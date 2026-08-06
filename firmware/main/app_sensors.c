@@ -65,7 +65,11 @@ static void IRAM_ATTR radar_isr(void *argument)
 
 static void post_state(const sensor_context_t *context)
 {
-    app_ui_event_t event = {
+    /* app_ui_event_t's union embeds a full snapshot (~10 KB); a stack copy
+     * overflowed the sensor task on real hardware. The sensor task is this
+     * function's only caller, so a function-local static is race-free. */
+    static app_ui_event_t event;
+    event = (app_ui_event_t){
         .type = APP_UI_EVENT_SENSOR,
         .data.sensor = context->state,
     };
@@ -306,7 +310,7 @@ static void sensor_task(void *argument)
         if (changed) {
             context.state.sensor_updated_us = now;
             context.state.sensor_updated_at = wall_clock_seconds();
-#if CONFIG_CODEX_PET_LOG_SENSOR_DIAGNOSTICS
+#if CONFIG_AGENTAGOTCHI_LOG_SENSOR_DIAGNOSTICS
             ESP_LOGI(TAG, "T=%.2fC RH=%.1f%% battery=%.3fV/%d%% presence=%d",
                 context.state.temperature_c, context.state.humidity_rh,
                 context.state.battery_voltage, context.state.battery_percent,
@@ -319,16 +323,21 @@ static void sensor_task(void *argument)
 
 esp_err_t app_sensors_start(void)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
-    if (xTaskCreatePinnedToCoreWithCaps(
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
+    /* FreeRTOS task stacks must live in internal RAM: the Xtensa context
+     * switch path cannot touch PSRAM. MALLOC_CAP_SPIRAM here is invalid and
+     * overflowed/corrupted on real hardware. */
+    if (xTaskCreatePinnedToCore(
             sensor_task,
             "pet_sensors",
-            6144,
+            /* 8 KiB internal RAM. The real overflow cause was a 10 KB
+             * app_ui_event_t union copy on this stack (fixed by static
+             * storage in post_state); 8 KiB restores headroom. */
+            8192,
             NULL,
             3,
             &s_sensor_task,
-            0,
-            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+            0) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
 #else

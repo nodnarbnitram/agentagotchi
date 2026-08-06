@@ -109,15 +109,15 @@ esp_err_t app_audio_start(void)
     if (s_chirp_queue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreatePinnedToCoreWithCaps(
+    /* Task stacks must be internal RAM (Xtensa context switch). */
+    if (xTaskCreatePinnedToCore(
             audio_task,
             "pet_audio",
             6144,
             NULL,
             3,
             NULL,
-            0,
-            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+            0) != pdPASS) {
         vQueueDelete(s_chirp_queue);
         s_chirp_queue = NULL;
         return ESP_ERR_NO_MEM;

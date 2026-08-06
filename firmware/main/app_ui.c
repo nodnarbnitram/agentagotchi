@@ -1,6 +1,7 @@
 #include "app_ui.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,11 +23,16 @@
 #include "sensor_math.h"
 
 #define STATUS_BAR_HEIGHT 20
+/* LVGL rows are real objects with real RAM cost; the tray virtualizes the
+ * 64-task data model down to a bounded visible set. Priority ordering means
+ * the tasks most worth acting on are always within the rendered window. */
+#define APP_UI_MAX_ROWS 16
 #define PET_WIDTH 192
 #define PET_HEIGHT 144
 #define UI_TIMER_MS 100
 #define STATUS_REDRAW_MS 1000
-#define TRAY_TASKS_VISIBLE 7
+#define TRAY_ROW_HEIGHT 28
+#define TRAY_TITLE_HEIGHT 28
 #define SCREEN_WIDTH 320
 #define BUBBLE_TOP 27
 #define BUBBLE_RIGHT (SCREEN_WIDTH - 8)
@@ -38,7 +44,7 @@
 #define BUBBLE_TITLE_MAX_LINES 3
 
 typedef struct {
-    app_settings_t settings;
+    char temp_unit;
     lv_font_t status_font;
     app_snapshot_t snapshot;
     app_sensor_state_t sensors;
@@ -47,6 +53,17 @@ typedef struct {
     bool provisioning;
     bool websocket_connected;
     int wifi_rssi;
+    bool manual_override;
+    char manual_task_id[APP_TASK_ID_MAX];
+    char featured_task_id[APP_TASK_ID_MAX];
+    uint64_t priority_sequence;
+    struct {
+        bool valid;
+        char task_id[APP_TASK_ID_MAX];
+        int rank;
+        uint64_t entered_sequence;
+    } priority[APP_MAX_TASKS];
+    char dismissed_task_id[APP_TASK_ID_MAX];
     uint8_t animation_frame;
     uint16_t *pet_pixels;
     TickType_t last_status_draw;
@@ -70,7 +87,9 @@ typedef struct {
     lv_obj_t *counts_label;
     lv_obj_t *subagents_label;
     lv_obj_t *task_tray;
-    lv_obj_t *tray_labels[TRAY_TASKS_VISIBLE];
+    lv_obj_t *tray_rows[APP_UI_MAX_ROWS];
+    lv_obj_t *tray_state_labels[APP_UI_MAX_ROWS];
+    lv_obj_t *tray_labels[APP_UI_MAX_ROWS];
 
     int rendered_wifi_bars;
     int rendered_battery_percent;
@@ -121,7 +140,7 @@ static const char *reason_text(const char *reason)
     if (strcmp(reason, "working") == 0) {
         return "Working";
     }
-    return "Codex is quiet";
+    return "Agentagotchi is quiet";
 }
 
 static lv_obj_t *make_label(
@@ -217,19 +236,234 @@ static void layout_speech_bubble(void)
         BUBBLE_TOP + bubble_height - 10);
 }
 
+static int find_task_index(const app_snapshot_t *snapshot, const char *task_id)
+{
+    if (snapshot == NULL || task_id == NULL || task_id[0] == '\0') {
+        return -1;
+    }
+    for (int i = 0; i < snapshot->task_count; ++i) {
+        if (strcmp(snapshot->tasks[i].id, task_id) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int find_priority_record(const char *task_id)
+{
+    if (task_id == NULL || task_id[0] == '\0') {
+        return -1;
+    }
+    for (int i = 0; i < APP_MAX_TASKS; ++i) {
+        if (s_ui.priority[i].valid && strcmp(s_ui.priority[i].task_id, task_id) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int allocate_priority_record(void)
+{
+    for (int i = 0; i < APP_MAX_TASKS; ++i) {
+        if (!s_ui.priority[i].valid) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void record_priority_task(const app_task_t *task)
+{
+    int record_index = find_priority_record(task->id);
+    int rank = app_protocol_state_priority(task->state);
+    if (record_index < 0) {
+        record_index = allocate_priority_record();
+        if (record_index < 0) {
+            return;
+        }
+        s_ui.priority[record_index].valid = true;
+        snprintf(
+            s_ui.priority[record_index].task_id,
+            sizeof(s_ui.priority[record_index].task_id),
+            "%s",
+            task->id);
+        s_ui.priority[record_index].rank = rank;
+        s_ui.priority[record_index].entered_sequence = ++s_ui.priority_sequence;
+    } else if (s_ui.priority[record_index].rank != rank) {
+        /* Re-entering a rank appends to that rank's FIFO. Same-state
+         * updates deliberately keep their original queue position. */
+        s_ui.priority[record_index].rank = rank;
+        s_ui.priority[record_index].entered_sequence = ++s_ui.priority_sequence;
+    }
+}
+
+static void update_priority_queue(const app_snapshot_t *next)
+{
+    for (int i = 0; i < APP_MAX_TASKS; ++i) {
+        if (s_ui.priority[i].valid &&
+            find_task_index(next, s_ui.priority[i].task_id) < 0) {
+            s_ui.priority[i].valid = false;
+        }
+    }
+    /* Existing records retain their FIFO position. Process newly observed
+     * tasks from newest updatedAt to oldest so the first complete snapshot has
+     * the contract's recency tie-break; subsequent arrivals still join behind
+     * the already-established rank queue. */
+    for (int i = 0; i < next->task_count; ++i) {
+        if (find_priority_record(next->tasks[i].id) >= 0) {
+            record_priority_task(&next->tasks[i]);
+        }
+    }
+    bool processed[APP_MAX_TASKS] = {false};
+    for (int count = 0; count < next->task_count; ++count) {
+        int newest = -1;
+        for (int i = 0; i < next->task_count; ++i) {
+            if (processed[i] || find_priority_record(next->tasks[i].id) >= 0) {
+                continue;
+            }
+            if (newest < 0 || strcmp(
+                    next->tasks[i].updated_at,
+                    next->tasks[newest].updated_at) > 0) {
+                newest = i;
+            }
+        }
+        if (newest < 0) {
+            break;
+        }
+        processed[newest] = true;
+        record_priority_task(&next->tasks[newest]);
+    }
+}
+
+static int automatic_feature_index(void)
+{
+    int best = -1;
+    for (int i = 0; i < s_ui.snapshot.task_count; ++i) {
+        const app_task_t *task = &s_ui.snapshot.tasks[i];
+        if (task->snoozed) {
+            continue;
+        }
+        int current_record = find_priority_record(task->id);
+        if (current_record < 0) {
+            continue;
+        }
+        if (best < 0) {
+            best = i;
+            continue;
+        }
+        int best_record = find_priority_record(s_ui.snapshot.tasks[best].id);
+        if (s_ui.priority[current_record].rank > s_ui.priority[best_record].rank ||
+            (s_ui.priority[current_record].rank == s_ui.priority[best_record].rank &&
+                s_ui.priority[current_record].entered_sequence <
+                    s_ui.priority[best_record].entered_sequence)) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+static bool task_display_before(const app_task_t *left, const app_task_t *right)
+{
+    int left_record = find_priority_record(left->id);
+    int right_record = find_priority_record(right->id);
+    if (left_record >= 0 && right_record >= 0 &&
+        s_ui.priority[left_record].rank != s_ui.priority[right_record].rank) {
+        return s_ui.priority[left_record].rank > s_ui.priority[right_record].rank;
+    }
+    if (left_record >= 0 && right_record >= 0 &&
+        s_ui.priority[left_record].entered_sequence !=
+            s_ui.priority[right_record].entered_sequence) {
+        return s_ui.priority[left_record].entered_sequence <
+            s_ui.priority[right_record].entered_sequence;
+    }
+    /* updatedAt is the deterministic tie-break for tasks first observed in a
+     * complete snapshot when no queue history exists yet. */
+    int updated = strcmp(left->updated_at, right->updated_at);
+    return updated > 0 || (updated == 0 && strcmp(left->id, right->id) < 0);
+}
+
+static void sort_snapshot_tasks(void)
+{
+    for (int i = 1; i < s_ui.snapshot.task_count; ++i) {
+        app_task_t current = s_ui.snapshot.tasks[i];
+        int j = i;
+        while (j > 0 && task_display_before(&current, &s_ui.snapshot.tasks[j - 1])) {
+            s_ui.snapshot.tasks[j] = s_ui.snapshot.tasks[j - 1];
+            --j;
+        }
+        s_ui.snapshot.tasks[j] = current;
+    }
+}
+
+static int featured_task_index(void)
+{
+    int index = find_task_index(&s_ui.snapshot, s_ui.featured_task_id);
+    return index >= 0 ? index : automatic_feature_index();
+}
+
+static void reconcile_featured_task(void)
+{
+    int automatic = automatic_feature_index();
+    if (s_ui.manual_override) {
+        int manual = find_task_index(&s_ui.snapshot, s_ui.manual_task_id);
+        if (manual < 0) {
+            s_ui.manual_override = false;
+            s_ui.manual_task_id[0] = '\0';
+        } else if (automatic >= 0) {
+            int automatic_record = find_priority_record(s_ui.snapshot.tasks[automatic].id);
+            int manual_record = find_priority_record(s_ui.snapshot.tasks[manual].id);
+            if (automatic_record >= 0 && manual_record >= 0 &&
+                s_ui.priority[automatic_record].rank > s_ui.priority[manual_record].rank) {
+                /* New urgency reclaims the main pet from a manual browse. */
+                s_ui.manual_override = false;
+                s_ui.manual_task_id[0] = '\0';
+            }
+        }
+    }
+
+    int selected = -1;
+    if (s_ui.manual_override) {
+        selected = find_task_index(&s_ui.snapshot, s_ui.manual_task_id);
+    }
+    if (selected < 0) {
+        selected = automatic;
+    }
+    if (selected >= 0) {
+        snprintf(
+            s_ui.featured_task_id,
+            sizeof(s_ui.featured_task_id),
+            "%s",
+            s_ui.snapshot.tasks[selected].id);
+    } else {
+        s_ui.featured_task_id[0] = '\0';
+    }
+}
+
 static void update_tray(void)
 {
-    for (int i = 0; i < TRAY_TASKS_VISIBLE; ++i) {
+    for (int i = 0; i < APP_UI_MAX_ROWS; ++i) {
         if (i < s_ui.snapshot.task_count) {
             app_task_t *task = &s_ui.snapshot.tasks[i];
+            lv_obj_remove_flag(s_ui.tray_rows[i], LV_OBJ_FLAG_HIDDEN);
+            /* The colored pet marker is the row avatar; the text beside it
+             * keeps the current state visible without allocating 64 canvases. */
             lv_label_set_text_fmt(
+                s_ui.tray_state_labels[i],
+                "● %s",
+                app_protocol_state_name(task->state));
+            lv_label_set_text(
                 s_ui.tray_labels[i],
-                "%s  %s",
-                app_protocol_state_name(task->state),
-                task->title[0] == '\0' ? "Codex task" : task->title);
-            lv_obj_set_style_text_color(s_ui.tray_labels[i], state_color(task->state), 0);
+                task->title[0] == '\0' ? "Agent task" : task->title);
+            lv_obj_set_style_text_color(
+                s_ui.tray_state_labels[i],
+                state_color(task->state),
+                0);
+            lv_obj_set_style_bg_color(
+                s_ui.tray_rows[i],
+                task->snoozed ? lv_color_hex(0x18272E) : lv_color_hex(0x1C3039),
+                0);
         } else {
-            lv_label_set_text(s_ui.tray_labels[i], "");
+            lv_obj_add_flag(s_ui.tray_rows[i], LV_OBJ_FLAG_HIDDEN);
         }
     }
 }
@@ -272,21 +506,22 @@ static void render_main_content(void)
         return;
     }
 
-    app_agent_state_t state = s_ui.has_snapshot
-        ? s_ui.snapshot.aggregate_state
+    int featured_index = s_ui.has_snapshot ? featured_task_index() : -1;
+    app_agent_state_t state = featured_index >= 0
+        ? s_ui.snapshot.tasks[featured_index].state
         : APP_STATE_IDLE;
     lv_label_set_text(s_ui.state_label, app_protocol_state_name(state));
     lv_obj_set_style_text_color(s_ui.state_label, state_color(state), 0);
-    if (!s_ui.has_snapshot || s_ui.snapshot.task_count == 0) {
+    if (featured_index < 0) {
         lv_label_set_text(s_ui.title_label, "All quiet");
         lv_label_set_text(
             s_ui.reason_label,
-            s_ui.websocket_connected ? "Waiting for Codex" : "Mac bridge offline");
+            s_ui.websocket_connected ? "Waiting for agent feeds" : "Feed bridges offline");
     } else {
-        const app_task_t *task = &s_ui.snapshot.tasks[0];
+        const app_task_t *task = &s_ui.snapshot.tasks[featured_index];
         lv_label_set_text(
             s_ui.title_label,
-            task->title[0] == '\0' ? "Codex task" : task->title);
+            task->title[0] == '\0' ? "Agent task" : task->title);
         lv_label_set_text(s_ui.reason_label, reason_text(task->reason));
     }
     lv_label_set_text_fmt(
@@ -314,17 +549,20 @@ static void render_main_content(void)
 static void apply_snapshot(const app_snapshot_t *snapshot)
 {
     bool chirp = contains_new_input_transition(snapshot);
+    update_priority_queue(snapshot);
     s_ui.snapshot = *snapshot;
     s_ui.snapshot.device = s_ui.sensors;
+    sort_snapshot_tasks();
     s_ui.has_snapshot = true;
     s_ui.provisioning = false;
+    reconcile_featured_task();
     render_main_content();
     if (chirp) {
         app_audio_request_chirp();
     }
 }
 
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
 static void set_label_if_changed(lv_obj_t *label, char *cached, size_t capacity, const char *value)
 {
     if (strncmp(cached, value, capacity) == 0) {
@@ -354,7 +592,7 @@ static int wifi_bar_count(void)
 
 static void update_status_bar(void)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
     int bars = wifi_bar_count();
     if (bars != s_ui.rendered_wifi_bars) {
         for (int i = 0; i < 4; ++i) {
@@ -391,7 +629,7 @@ static void update_status_bar(void)
     }
 
     if (s_ui.sensors.temperature_valid) {
-        float value = s_ui.settings.temp_unit == 'C'
+        float value = s_ui.temp_unit == 'C'
             ? s_ui.sensors.temperature_c
             : sensor_math_c_to_f(s_ui.sensors.temperature_c);
         snprintf(
@@ -399,9 +637,9 @@ static void update_status_bar(void)
             sizeof(text),
             "%.0f°%c",
             value,
-            s_ui.settings.temp_unit == 'C' ? 'C' : 'F');
+            s_ui.temp_unit == 'C' ? 'C' : 'F');
     } else {
-        snprintf(text, sizeof(text), "—°%c", s_ui.settings.temp_unit == 'C' ? 'C' : 'F');
+        snprintf(text, sizeof(text), "—°%c", s_ui.temp_unit == 'C' ? 'C' : 'F');
     }
     set_label_if_changed(
         s_ui.temperature_label,
@@ -438,11 +676,16 @@ static void update_status_bar(void)
 
 static void pet_click_handler(lv_event_t *event)
 {
-    if (lv_event_get_code(event) == LV_EVENT_RELEASED &&
-        s_ui.has_snapshot && s_ui.snapshot.task_count > 0) {
+    if (lv_event_get_code(event) != LV_EVENT_RELEASED || !s_ui.has_snapshot) {
+        return;
+    }
+    int index = featured_task_index();
+    if (index >= 0 && s_ui.snapshot.tasks[index].focus_capability) {
+        const app_task_t *task = &s_ui.snapshot.tasks[index];
         (void)app_network_request_focus(
-            s_ui.snapshot.tasks[0].id,
-            s_ui.snapshot.seq);
+            task->id,
+            task->feed_slot,
+            task->origin_revision);
     }
 }
 
@@ -462,9 +705,65 @@ static void counts_click_handler(lv_event_t *event)
 
 static void tray_click_handler(lv_event_t *event)
 {
-    if (lv_event_get_code(event) == LV_EVENT_RELEASED) {
+    if (lv_event_get_code(event) == LV_EVENT_RELEASED &&
+        lv_event_get_target(event) == s_ui.task_tray) {
         lv_obj_add_flag(s_ui.task_tray, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+static int row_index_from_event(lv_event_t *event)
+{
+    return (int)(intptr_t)lv_event_get_user_data(event);
+}
+
+static void row_event_handler(lv_event_t *event)
+{
+    int row = row_index_from_event(event);
+    if (row < 0 || row >= s_ui.snapshot.task_count) {
+        return;
+    }
+    if (lv_event_get_code(event) == LV_EVENT_LONG_PRESSED) {
+        /* Pending physical validation: long-pressing a row is the explicit
+         * dismiss gesture. Browsing and ordinary row taps never dismiss. */
+        const app_task_t *task = &s_ui.snapshot.tasks[row];
+        if (task->state == APP_STATE_READY || task->state == APP_STATE_BLOCKED) {
+            snprintf(s_ui.dismissed_task_id, sizeof(s_ui.dismissed_task_id), "%s", task->id);
+            (void)app_network_request_dismiss(
+                task->id,
+                task->feed_slot,
+                task->origin_revision,
+                APP_DISMISS_ACKNOWLEDGE);
+        } else if (task->state == APP_STATE_NEEDS_INPUT) {
+            snprintf(s_ui.dismissed_task_id, sizeof(s_ui.dismissed_task_id), "%s", task->id);
+            (void)app_network_request_dismiss(
+                task->id,
+                task->feed_slot,
+                task->origin_revision,
+                APP_DISMISS_SNOOZE);
+        }
+        return;
+    }
+    if (lv_event_get_code(event) != LV_EVENT_RELEASED) {
+        return;
+    }
+    if (strcmp(s_ui.dismissed_task_id, s_ui.snapshot.tasks[row].id) == 0) {
+        s_ui.dismissed_task_id[0] = '\0';
+        return;
+    }
+    s_ui.dismissed_task_id[0] = '\0';
+    /* A row tap only changes BOX-3 presentation. It never sends a host
+     * action. Re-tapping the selected row releases the manual override. */
+    const app_task_t *task = &s_ui.snapshot.tasks[row];
+    if (s_ui.manual_override && strcmp(s_ui.manual_task_id, task->id) == 0) {
+        s_ui.manual_override = false;
+        s_ui.manual_task_id[0] = '\0';
+    } else {
+        s_ui.manual_override = true;
+        snprintf(s_ui.manual_task_id, sizeof(s_ui.manual_task_id), "%s", task->id);
+    }
+    reconcile_featured_task();
+    render_main_content();
+    lv_obj_add_flag(s_ui.task_tray, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void animate_pet(void)
@@ -472,8 +771,9 @@ static void animate_pet(void)
     if (s_ui.pet_pixels == NULL || s_ui.pet_canvas == NULL) {
         return;
     }
-    app_agent_state_t state = s_ui.has_snapshot
-        ? s_ui.snapshot.aggregate_state
+    int index = s_ui.has_snapshot ? featured_task_index() : -1;
+    app_agent_state_t state = index >= 0
+        ? s_ui.snapshot.tasks[index].state
         : APP_STATE_IDLE;
     if (pet_asset_copy_frame(
             &s_ui.pet_asset,
@@ -526,7 +826,7 @@ static void ui_timer_handler(lv_timer_t *timer)
             s_ui.provisioning = event.data.provisioning.waiting;
             if (event.data.provisioning.temp_unit == 'C' ||
                 event.data.provisioning.temp_unit == 'F') {
-                s_ui.settings.temp_unit = event.data.provisioning.temp_unit;
+                s_ui.temp_unit = event.data.provisioning.temp_unit;
                 s_ui.status_dirty = true;
             }
             render_main_content();
@@ -547,7 +847,7 @@ static void ui_timer_handler(lv_timer_t *timer)
 
 static void build_status_bar(lv_obj_t *screen)
 {
-#if CONFIG_CODEX_PET_SENSOR_BAR
+#if CONFIG_AGENTAGOTCHI_SENSOR_BAR
     s_ui.status_bar = lv_obj_create(screen);
     lv_obj_set_pos(s_ui.status_bar, 0, 0);
     lv_obj_set_size(s_ui.status_bar, 320, STATUS_BAR_HEIGHT);
@@ -702,22 +1002,52 @@ static void build_ui(void *argument)
     lv_obj_set_style_border_width(s_ui.task_tray, 0, 0);
     lv_obj_set_style_radius(s_ui.task_tray, 0, 0);
     lv_obj_set_style_pad_all(s_ui.task_tray, 10, 0);
-    lv_obj_remove_flag(s_ui.task_tray, LV_OBJ_FLAG_SCROLLABLE);
+    /* The tray owns all bounded rows, so LVGL provides vertical scrolling for
+     * tasks beyond the screen without adding a second input transport. */
+    lv_obj_add_flag(s_ui.task_tray, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_ui.task_tray, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(s_ui.task_tray, tray_click_handler, LV_EVENT_RELEASED, NULL);
     lv_obj_t *tray_title = make_label(
         s_ui.task_tray, &lv_font_montserrat_18, lv_color_hex(0xF1F5F7), LV_TEXT_ALIGN_LEFT);
     lv_label_set_text(tray_title, "Tasks");
     lv_obj_set_pos(tray_title, 4, 0);
-    for (int i = 0; i < TRAY_TASKS_VISIBLE; ++i) {
-        s_ui.tray_labels[i] = make_label(
-            s_ui.task_tray,
+    for (int i = 0; i < APP_UI_MAX_ROWS; ++i) {
+        s_ui.tray_rows[i] = lv_obj_create(s_ui.task_tray);
+        lv_obj_set_pos(s_ui.tray_rows[i], 4, TRAY_TITLE_HEIGHT + i * TRAY_ROW_HEIGHT);
+        lv_obj_set_size(s_ui.tray_rows[i], 292, TRAY_ROW_HEIGHT - 2);
+        lv_obj_set_style_bg_color(s_ui.tray_rows[i], lv_color_hex(0x1C3039), 0);
+        lv_obj_set_style_bg_opa(s_ui.tray_rows[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(s_ui.tray_rows[i], 0, 0);
+        lv_obj_set_style_radius(s_ui.tray_rows[i], 5, 0);
+        lv_obj_set_style_pad_all(s_ui.tray_rows[i], 2, 0);
+        lv_obj_remove_flag(s_ui.tray_rows[i], LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(s_ui.tray_rows[i], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_event_cb(
+            s_ui.tray_rows[i],
+            row_event_handler,
+            LV_EVENT_RELEASED,
+            (void *)(intptr_t)i);
+        lv_obj_add_event_cb(
+            s_ui.tray_rows[i],
+            row_event_handler,
+            LV_EVENT_LONG_PRESSED,
+            (void *)(intptr_t)i);
+
+        s_ui.tray_state_labels[i] = make_label(
+            s_ui.tray_rows[i],
             &lv_font_montserrat_12,
             lv_color_hex(0xB9C8CF),
             LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(s_ui.tray_state_labels[i], 4, 1);
+        lv_obj_set_width(s_ui.tray_state_labels[i], 80);
+        s_ui.tray_labels[i] = make_label(
+            s_ui.tray_rows[i],
+            &lv_font_montserrat_12,
+            lv_color_hex(0xD7E2E7),
+            LV_TEXT_ALIGN_LEFT);
         lv_label_set_long_mode(s_ui.tray_labels[i], LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_pos(s_ui.tray_labels[i], 4, 34 + i * 24);
-        lv_obj_set_size(s_ui.tray_labels[i], 290, 18);
+        lv_obj_set_pos(s_ui.tray_labels[i], 84, 1);
+        lv_obj_set_size(s_ui.tray_labels[i], 198, 18);
     }
 
     s_ui.rendered_wifi_bars = -1;
@@ -735,7 +1065,7 @@ esp_err_t app_ui_start(const app_settings_t *settings)
         return ESP_ERR_INVALID_ARG;
     }
     memset(&s_ui, 0, sizeof(s_ui));
-    s_ui.settings = *settings;
+    s_ui.temp_unit = settings->temp_unit;
     s_ui.wifi_rssi = -127;
     if (!pet_asset_open(&s_ui.pet_asset) ||
         s_ui.pet_asset.width != PET_WIDTH ||
@@ -753,6 +1083,11 @@ esp_err_t app_ui_start(const app_settings_t *settings)
     if (s_ui.pet_pixels == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    /* The draw buffer must stay DMA-capable (internal RAM): the ILI9341 SPI
+     * driver transmits it via DMA, and PSRAM buffers stall the flush path
+     * (wait_for_flushing spins, task watchdog fires). The four-feed rework
+     * made the BSP default (height 100 = 64 KB) too large, so sdkconfig
+     * drops BSP_LCD_DRAW_BUF_HEIGHT to 40 (25.6 KB). */
     if (bsp_display_start() == NULL) {
         return ESP_FAIL;
     }

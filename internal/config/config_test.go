@@ -14,7 +14,7 @@ func TestEnsureIdentityCreatesPinnedCAProfileAndPrivateFiles(t *testing.T) {
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	id, err := EnsureIdentity(dir, "codex-pet.local", 8787)
+	id, err := EnsureIdentity(dir, "agentagotchi.local", 6571)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestEnsureIdentityCreatesPinnedCAProfileAndPrivateFiles(t *testing.T) {
 	if !cert.IsCA || cert.KeyUsage&x509.KeyUsageCertSign == 0 {
 		t.Fatalf("certificate cannot act as the provisioned trust anchor: %+v", cert.KeyUsage)
 	}
-	if err := cert.VerifyHostname("codex-pet.local"); err != nil {
+	if err := cert.VerifyHostname("agentagotchi.local"); err != nil {
 		t.Fatal(err)
 	}
 	if !certificateProfileValid(id.CertPath, id.KeyPath, id.HostName, time.Now()) {

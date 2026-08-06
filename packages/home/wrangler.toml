@@ -1,0 +1,20 @@
+name = "agentagotchi-home"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# One Durable Object class; exactly one instance per Home (see docs/adr/0001,
+# openspec home-bridge spec: DO-per-Home is the tenancy boundary).
+[durable_objects]
+bindings = [
+  { name = "HOME", class_name = "HomeDurableObject" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["HomeDurableObject"]
+
+# Browser administration client served as static assets.
+[assets]
+directory = "public"
+binding = "ASSETS"

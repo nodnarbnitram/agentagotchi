@@ -1,4 +1,7 @@
 /work/
+/node_modules/
+/packages/*/node_modules/
+/packages/home/.dev.vars
 /firmware/build/
 /firmware/.cache/
 /firmware/managed_components/
@@ -8,3 +11,10 @@ __pycache__/
 *.py[cod]
 .DS_Store
 *.log
+/clients/macos-admin/.build/
+/packages/home/.wrangler/
+
+# Local-only: openspec change working state and pi session/agent artifacts
+.openspec*
+openspec/
+.pi/

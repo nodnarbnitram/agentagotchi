@@ -16,7 +16,7 @@
 
 #define UI_QUEUE_DEPTH 8
 
-static const char *TAG = "codex_pet";
+static const char *TAG = "agentagotchi";
 static QueueHandle_t s_ui_queue;
 static StaticQueue_t s_ui_queue_control;
 static uint8_t *s_ui_queue_storage;

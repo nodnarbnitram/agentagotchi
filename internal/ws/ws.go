@@ -68,28 +68,37 @@ func Upgrade(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 }
 
 func (c *Conn) ReadJSON(v any) error {
+	payload, err := c.ReadText()
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(payload, v); err != nil {
+		return fmt.Errorf("decode websocket JSON: %w", err)
+	}
+	return nil
+}
+
+// ReadText reads one complete text frame while servicing control frames.
+func (c *Conn) ReadText() ([]byte, error) {
 	for {
 		opcode, payload, err := c.readFrame()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		switch opcode {
 		case opText:
-			if err := json.Unmarshal(payload, v); err != nil {
-				return fmt.Errorf("decode websocket JSON: %w", err)
-			}
-			return nil
+			return payload, nil
 		case opPing:
 			if err := c.writeFrame(opPong, payload); err != nil {
-				return err
+				return nil, err
 			}
 		case opClose:
 			_ = c.writeFrame(opClose, nil)
-			return io.EOF
+			return nil, io.EOF
 		case opPong:
 			continue
 		default:
-			return fmt.Errorf("unsupported websocket opcode %d", opcode)
+			return nil, fmt.Errorf("unsupported websocket opcode %d", opcode)
 		}
 	}
 }
@@ -101,6 +110,9 @@ func (c *Conn) WriteJSON(v any) error {
 	}
 	return c.writeFrame(opText, b)
 }
+
+// WriteText writes already-encoded protocol bytes without re-marshalling.
+func (c *Conn) WriteText(payload []byte) error { return c.writeFrame(opText, payload) }
 
 func (c *Conn) Ping() error {
 	return c.writeFrame(opPing, []byte("pet"))

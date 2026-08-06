@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentagotchi Home</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b151b; color: #d7e1e8; margin: 0; padding: 2rem; max-width: 60rem; }
+  h1 { font-size: 1.25rem; color: #7fd4a8; }
+  h2 { font-size: 1rem; color: #8fb8cc; margin-top: 2rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #1d2c36; }
+  th { color: #6d8a9c; font-weight: normal; }
+  button { background: #17323f; color: #d7e1e8; border: 1px solid #2a4a5c; border-radius: 4px; padding: 0.3rem 0.7rem; font: inherit; cursor: pointer; }
+  button:hover { background: #1f4254; }
+  input { background: #10202a; color: #d7e1e8; border: 1px solid #2a4a5c; border-radius: 4px; padding: 0.4rem; font: inherit; }
+  .state-needs_input { color: #f0b35e; }
+  .state-blocked { color: #e86a6a; }
+  .state-ready { color: #7fd4a8; }
+  .state-running { color: #6db3d8; }
+  .state-idle { color: #6d8a9c; }
+  #login { max-width: 22rem; }
+  .hidden { display: none; }
+  .muted { color: #54707f; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>Agentagotchi Home</h1>
+
+<div id="login">
+  <h2>Administrator</h2>
+  <form id="login-form">
+    <input type="password" id="password" placeholder="password" minlength="12" required>
+    <button type="submit">Log in</button>
+  </form>
+  <form id="bootstrap-form" class="hidden">
+    <p class="muted">First run: set the single-admin password.</p>
+    <input type="password" id="bootstrap-password" placeholder="new password (>= 12 chars)" minlength="12" required>
+    <input type="password" id="bootstrap-token" placeholder="bootstrap token" required>
+    <button type="submit">Bootstrap</button>
+  </form>
+  <p id="login-error" class="state-blocked"></p>
+</div>
+
+<div id="app" class="hidden">
+  <h2>Presence</h2>
+  <div id="connectivity" class="muted"></div>
+  <table>
+    <thead><tr><th>Task</th><th>State</th><th>Reason</th><th>Agents</th><th>Capabilities</th></tr></thead>
+    <tbody id="tasks"></tbody>
+  </table>
+
+  <h2>Pending pairing codes</h2>
+  <table>
+    <thead><tr><th>Client</th><th>Role</th><th>Code</th><th>Expires</th><th></th></tr></thead>
+    <tbody id="pending"></tbody>
+  </table>
+
+  <h2>Credentials</h2>
+  <table>
+    <thead><tr><th>Client</th><th>Role</th><th>Issued</th><th>Status</th><th></th></tr></thead>
+    <tbody id="credentials"></tbody>
+  </table>
+</div>
+
+<script type="module">
+// Thin browser client: all domain rules and authorization live in the Home
+// service (agentagotchi.admin.v1 over HTTPS, cookie session + CSRF header).
+let csrf = "";
+
+async function api(path, options = {}) {
+  const response = await fetch(`/admin/api/${path}`, {
+    ...options,
+    headers: { "content-type": "application/json", "x-csrf-token": csrf, ...(options.headers ?? {}) },
+  });
+  if (response.status === 401) { showLogin(); throw new Error("unauthorized"); }
+  if (!response.ok) throw new Error(`${response.status}`);
+  return response.json();
+}
+
+function showLogin() {
+  document.getElementById("login").classList.remove("hidden");
+  document.getElementById("app").classList.add("hidden");
+}
+
+async function refresh() {
+  const status = await api("status");
+  document.getElementById("connectivity").textContent =
+    `edges: ${status.edges.join(", ") || "none"} · devices: ${status.devices} · tasks: ${status.taskPresences}`;
+  const tasks = document.getElementById("tasks");
+  tasks.textContent = "";
+  for (const task of status.snapshot.tasks) {
+    const row = tasks.insertRow();
+    row.insertCell().textContent = task.safeTitle;
+    const state = row.insertCell();
+    state.textContent = task.state + (task.snoozed ? " (snoozed)" : "");
+    state.className = `state-${task.state}`;
+    row.insertCell().textContent = task.reason;
+    row.insertCell().textContent = task.subagentCount || "";
+    row.insertCell().textContent = task.capabilities.join(", ");
+  }
+  const { pending } = await api("pairing/pending");
+  const pendingBody = document.getElementById("pending");
+  pendingBody.textContent = "";
+  for (const code of pending) {
+    const row = pendingBody.insertRow();
+    row.insertCell().textContent = code.clientName;
+    row.insertCell().textContent = code.role;
+    row.insertCell().textContent = code.token;
+    row.insertCell().textContent = new Date(code.expiresAt).toLocaleTimeString();
+    const actions = row.insertCell();
+    const approve = document.createElement("button");
+    approve.textContent = "Approve";
+    approve.onclick = async () => { await api("pairing/approve", { method: "POST", body: JSON.stringify({ codeId: code.id }) }); refresh(); };
+    const deny = document.createElement("button");
+    deny.textContent = "Deny";
+    deny.onclick = async () => { await api("pairing/deny", { method: "POST", body: JSON.stringify({ codeId: code.id }) }); refresh(); };
+    actions.append(approve, deny);
+  }
+  const { credentials } = await api("pairing/list");
+  const credBody = document.getElementById("credentials");
+  credBody.textContent = "";
+  for (const cred of credentials) {
+    const row = credBody.insertRow();
+    row.insertCell().textContent = cred.clientName;
+    row.insertCell().textContent = cred.role;
+    row.insertCell().textContent = new Date(cred.issuedAt).toLocaleString();
+    row.insertCell().textContent = cred.revoked ? "revoked" : "active";
+    const actions = row.insertCell();
+    if (!cred.revoked) {
+      const revoke = document.createElement("button");
+      revoke.textContent = "Revoke";
+      revoke.onclick = async () => { await api("pairing/revoke", { method: "POST", body: JSON.stringify({ credentialId: cred.id }) }); refresh(); };
+      actions.append(revoke);
+    }
+  }
+}
+
+document.getElementById("login-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const password = document.getElementById("password").value;
+  const response = await fetch("/admin/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (response.status === 409) {
+    document.getElementById("bootstrap-form").classList.remove("hidden");
+    document.getElementById("login-error").textContent = "Not bootstrapped yet.";
+    return;
+  }
+  if (!response.ok) {
+    document.getElementById("login-error").textContent = "Login failed.";
+    return;
+  }
+  csrf = response.headers.get("x-csrf-token") ?? (await response.json()).csrf;
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  refresh();
+};
+
+document.getElementById("bootstrap-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const password = document.getElementById("bootstrap-password").value;
+  const token = document.getElementById("bootstrap-token").value;
+  const response = await fetch("/admin/bootstrap", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-bootstrap-token": token },
+    body: JSON.stringify({ password }),
+  });
+  if (!response.ok) {
+    document.getElementById("login-error").textContent = `Bootstrap failed: ${response.status}`;
+    return;
+  }
+  csrf = response.headers.get("x-csrf-token") ?? (await response.json()).csrf;
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  refresh();
+};
+
+setInterval(() => { if (!document.getElementById("app").classList.contains("hidden")) refresh(); }, 5000);
+</script>
+</body>
+</html>
