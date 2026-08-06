@@ -29,13 +29,13 @@
       "id": "7",
       "subject": "Phase 3: Pi adapter + same-machine acceptance (tasks 3.1–3.3)",
       "description": "Leased adapters/pi status-only mapping (3.1), concurrent Codex+Pi through one Edge (3.2), prove test matrix: UUID isolation, stale rejection, reconnect repair, lease cleanup, independent failure, privacy boundary (3.3).",
-      "status": "pending",
+      "status": "completed",
       "activeForm": "Implementing Pi adapter",
       "metadata": {},
       "blocks": [],
       "blockedBy": [],
       "createdAt": 1785973626689,
-      "updatedAt": 1785973626689
+      "updatedAt": 1785976027491
     },
     {
       "id": "8",

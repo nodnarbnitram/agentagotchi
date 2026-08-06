@@ -24,9 +24,9 @@ install, flash, or provision without explicit user authorization.
 
 ## 3. Phase 3 — Pi and same-machine cross-harness
 
-- [ ] 3.1 Implement a leased `adapters/pi` with honest status-only mapping (agent_start→running+working; settled+idle→ready+completed; reliable failure→blocked+failed; unload→end/lease-expiry); no Focus, no inferred needs_input
-- [ ] 3.2 Run Codex and Pi concurrently through one Edge without separate bridge processes or task collisions
-- [ ] 3.3 Prove via tests: UUID isolation for identical native IDs across adapters, stale generation/sequence/revision rejection, reconnect absolute-snapshot repair, lease cleanup without fabricated completion/failure, independent adapter failure, and the privacy boundary
+- [x] 3.1 Implement a leased `adapters/pi` with honest status-only mapping (agent_start→running+working; settled+idle→ready+completed; reliable failure→blocked+failed; unload→end/lease-expiry); no Focus, no inferred needs_input
+- [x] 3.2 Run Codex and Pi concurrently through one Edge without separate bridge processes or task collisions
+- [x] 3.3 Prove via tests: UUID isolation for identical native IDs across adapters, stale generation/sequence/revision rejection, reconnect absolute-snapshot repair, lease cleanup without fabricated completion/failure, independent adapter failure, and the privacy boundary
 
 ## 4. Phase 4 — Pairing, feeds, and BOX-3 multi-source UI
 

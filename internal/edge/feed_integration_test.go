@@ -21,10 +21,15 @@ import (
 	"agentagotchi.local/agentagotchi/internal/presence"
 )
 
-func newTestService(t *testing.T) *Service {
+func newTestService(t *testing.T, port int) *Service {
+	t.Helper()
+	return newTestServiceDir(t, t.TempDir(), port)
+}
+
+func newTestServiceDir(t *testing.T, dir string, port int) *Service {
 	t.Helper()
 	s, err := NewService(Options{
-		DataDir: t.TempDir(), HostName: "localhost", DisableMDNS: true,
+		DataDir: dir, HostName: "localhost", Port: port, DisableMDNS: true,
 		DisableAppServer: true, FeedAuthenticator: BearerFeedAuthenticator{Token: "test-token"},
 	})
 	if err != nil {
@@ -34,7 +39,7 @@ func newTestService(t *testing.T) *Service {
 }
 
 func TestFeedSnapshotAndCapabilityActionIntegration(t *testing.T) {
-	s := newTestService(t)
+	s := newTestService(t, 0)
 	lease, err := s.core.Attach("test-adapter", []contract.Capability{contract.CapabilityFocus})
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +97,7 @@ func TestFeedSnapshotAndCapabilityActionIntegration(t *testing.T) {
 }
 
 func TestHookPresenceFeedDoesNotLeakNativeIDOrWorkspace(t *testing.T) {
-	s := newTestService(t)
+	s := newTestService(t, 0)
 	s.applyCodexHook(contract.IPCHookEvent{
 		Schema: contract.SchemaIPCV1, Type: "hook_event", EventID: "event-1", Harness: "codex",
 		NativeSessionID: "019fa063-b4d1-7d81-bced-7f9f55ec7611", Event: "UserPromptSubmit",

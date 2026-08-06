@@ -1,0 +1,17 @@
+{
+  "name": "agentagotchi-pi-adapter",
+  "version": "0.1.0",
+  "description": "Agentagotchi Pi Harness Adapter: status-only presence reporting to the local Edge Bridge",
+  "type": "module",
+  "private": true,
+  "pi": {
+    "extensions": ["./extension.ts"]
+  },
+  "scripts": {
+    "test": "node test/run-tests.mjs"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.83.0",
+    "typescript": "^5.5.0"
+  }
+}
