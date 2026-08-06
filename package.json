@@ -1,0 +1,13 @@
+{
+  "name": "agentagotchi",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Agentagotchi monorepo: multi-harness agent presence (Edge Bridge, Home Bridge, Pi adapter)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present"
+  }
+}

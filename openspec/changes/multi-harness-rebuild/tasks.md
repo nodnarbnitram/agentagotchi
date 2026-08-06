@@ -10,7 +10,7 @@ install, flash, or provision without explicit user authorization.
 - [x] 1.1 Adopt Agentagotchi domain language across the repo; rename Codex-specific project, binary, package, UI, and protocol terminology that no longer describes the product
 - [x] 1.2 Replace `docs/PROTOCOL.md` atomically with role-separated contracts (adapter IPC, Edge upstream, device feeds, pairing, actions, administration); update host and firmware together, no parallel legacy/new state machines
 - [x] 1.3 Define the privacy allowlists (Task Presence ID, Safe Title, generic state/reason, allowlisted capabilities, counts, ordering metadata, timestamps) and write schema/contract tests proving prompts, commands, tool payloads, transcripts, full paths, credentials, private keys, Wi-Fi secrets, and native session IDs are structurally excluded — before any networking code
-- [x] 1.4 Split the semantic core into its own module free of harness lifecycle, transport, persistence, and display policy; establish the repo boundaries (semantic core, edge service, home service, adapters/codex, adapters/pi, pairing/auth, feed protocol, edge-upstream protocol, administration API, edge Native SDK app, home web app, firmware)
+- [x] 1.4 Split the semantic core into its own module free of harness lifecycle, transport, persistence, and display policy; establish the repo boundaries (semantic core, edge service, home service, internal/adapters/codex, packages/pi-adapter, internal/pairing, feed protocol, edge-upstream protocol, administration API, edge Native SDK app, home web app, firmware)
 
 ## 2. Phase 2 — Edge semantic core and Codex adapter
 
@@ -24,7 +24,7 @@ install, flash, or provision without explicit user authorization.
 
 ## 3. Phase 3 — Pi and same-machine cross-harness
 
-- [x] 3.1 Implement a leased `adapters/pi` with honest status-only mapping (agent_start→running+working; settled+idle→ready+completed; reliable failure→blocked+failed; unload→end/lease-expiry); no Focus, no inferred needs_input
+- [x] 3.1 Implement a leased `packages/pi-adapter` with honest status-only mapping (agent_start→running+working; settled+idle→ready+completed; reliable failure→blocked+failed; unload→end/lease-expiry); no Focus, no inferred needs_input
 - [x] 3.2 Run Codex and Pi concurrently through one Edge without separate bridge processes or task collisions
 - [x] 3.3 Prove via tests: UUID isolation for identical native IDs across adapters, stale generation/sequence/revision rejection, reconnect absolute-snapshot repair, lease cleanup without fabricated completion/failure, independent adapter failure, and the privacy boundary
 
@@ -46,7 +46,7 @@ install, flash, or provision without explicit user authorization.
 - [x] 5.5 Implement Home-to-device Presence Feeds and privacy-safe connectivity/dashboard data (no prompts, transcripts, tool payloads, commands, or filesystem metadata)
 - [x] 5.6 Build the browser administration client as static assets served by the Home Worker (thin client over shared admin APIs/schemas)
 - [x] 5.7 Implement full headless Edge CLI management (bootstrap, pairing, status, revocation, recovery)
-- [ ] 5.8 Build the optional Native SDK Edge administration client against the same admin contract (share domain rules/schemas/design, not rendering components)
+- [x] 5.8 Build the optional Native SDK Edge administration client against the same admin contract (share domain rules/schemas/design, not rendering components)
 
 ## 6. Phase 6 — Remote acceptance and hardening
 

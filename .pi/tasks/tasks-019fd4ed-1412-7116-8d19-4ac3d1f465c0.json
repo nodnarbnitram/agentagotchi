@@ -1,0 +1,41 @@
+{
+  "nextId": 4,
+  "tasks": [
+    {
+      "id": "1",
+      "subject": "Move network feed slots array to PSRAM heap",
+      "description": "Change feed_slot_context_t slots[APP_MAX_FEED_SLOTS] to a pointer in network_context_t, allocate in app_network_start via heap_caps_malloc(MALLOC_CAP_SPIRAM) with MALLOC_CAP_INTERNAL fallback. Frees ~88KB static DRAM to fix 37.7KB overflow.",
+      "status": "completed",
+      "activeForm": "Moving feed slots to PSRAM heap",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1785983904411,
+      "updatedAt": 1785983930111
+    },
+    {
+      "id": "2",
+      "subject": "Build firmware and verify DRAM headroom",
+      "description": "Run idf.py -C firmware build, capture to work/idf-build.log, verify SUCCESS, run idf.py size, report DRAM/flash numbers and warning count.",
+      "status": "completed",
+      "activeForm": "Building firmware",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1785983904412,
+      "updatedAt": 1785984028682
+    },
+    {
+      "id": "3",
+      "subject": "Run make test",
+      "description": "Run make test from repo root with GOCACHE=$(pwd)/work/gocache — must be green.",
+      "status": "completed",
+      "activeForm": "Running make test",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1785983904412,
+      "updatedAt": 1785984091073
+    }
+  ]
+}

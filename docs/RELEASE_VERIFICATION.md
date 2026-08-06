@@ -13,11 +13,11 @@ recorded in `docs/HARDWARE_ACCEPTANCE.md` only after real-kit runs.
 ## Automated coverage
 
 All of the following run under `make test` (plus `node test/run-tests.mjs` in
-`adapters/pi/` and `home/`):
+`packages/pi-adapter/` and `packages/home/`):
 
 | Plan requirement | Automated evidence |
 | --- | --- |
-| Privacy boundary structural exclusion (allowlists, fail-closed schemas) | `internal/contract/contract_test.go`, `home/test/run-tests.mjs` (wire validation) |
+| Privacy boundary structural exclusion (allowlists, fail-closed schemas) | `internal/contract/contract_test.go`, `packages/home/test/run-tests.mjs` (wire validation) |
 | Semantic core: opaque IDs, absolute reports, ordering, leases, retention, ack/snooze, capability registry | `internal/presence/presence_test.go` |
 | Codex lifecycle reduction (no Codex vocabulary in core) | `internal/adapters/codex/reduce_test.go` |
 | Hook sanitizer drops prompts/transcripts/tool input/cwd | `internal/adapters/codex/hook_test.go` |
@@ -29,9 +29,9 @@ All of the following run under `make test` (plus `node test/run-tests.mjs` in
 | Pairing ceremony: one-use codes, scoped credentials, revocation disconnect, secrets never in status | `internal/pairing/pairing_test.go`, `internal/edge/pairing_integration_test.go` |
 | Dismissal actions (acknowledge/snooze) state-gated, fail-closed, converging | `internal/edge/dismissal_test.go` |
 | Edge→Home upstream: absolute resync, change push, reverse action, auth-failure backoff | `internal/edge/upstream_integration_test.go` |
-| Home merge: per-Edge replacement, origin convergence, fail-closed validation | `home/test/run-tests.mjs` |
-| Home pairing ceremony parity with Edge | `home/test/run-tests.mjs` |
-| Pi adapter: leased session, reconnect absolute resend, offline retention, end | `adapters/pi/test/run-tests.mjs` |
+| Home merge: per-Edge replacement, origin convergence, fail-closed validation | `packages/home/test/run-tests.mjs` |
+| Home pairing ceremony parity with Edge | `packages/home/test/run-tests.mjs` |
+| Pi adapter: leased session, reconnect absolute resend, offline retention, end | `packages/pi-adapter/test/run-tests.mjs` |
 | Pet asset pipeline + RGB565 contract | `tools/test_pet_assets.py` |
 | Release contracts (firmware pins, launch agent, sensor build) | `tools/test_release_contracts.py` |
 | Firmware sensor math (host-compiled) | `firmware/tests/test_sensor_math.c` |
@@ -52,7 +52,7 @@ used. Redacted frames and logs are in `work/e2e-2026-08-05/`.
 | Edge paired to Home and Home status shows a connected Edge | **PASS** | `go run ./cmd/agentagotchi serve --data-dir /tmp/agot-e2e.XXX --home-url ws://127.0.0.1:18901/edge/v1 --home-token <redeemed-credential>`; `go run ./cmd/agentagotchi status`; `home-status-edge-fresh.json` / `home-status-terminal-ready.json`. |
 | Hook-originated ready/completed presence relayed to Home | **PASS** | `printf '<SessionStart JSON>' | go run ./cmd/agentagotchi hook --data-dir /tmp/agot-e2e.XXX`, followed by a `Stop` payload; `home-status-terminal-ready.json` contains only `agentagotchi.feed.v1` allowlisted fields. |
 | Privacy scan of captured feed/upstream frames and Home/Edge logs | **PASS** | `grep -RFn` for the native session UUID, `/Users/x/secret-project`, and prompt marker across `feed-frames*.jsonl`, `*-frame.json`, `home-wrangler.log`, and `edge.log` returned no matches. |
-| Home feed snapshot and allowlisted task projection | **PASS** | Node `ws` client from `home/node_modules/ws` connected to `ws://127.0.0.1:18901/feed/v1`; `feed-frames.jsonl` received `schema: agentagotchi.feed.v1`, terminal task, and only allowlisted task keys. |
+| Home feed snapshot and allowlisted task projection | **PASS** | Node `ws` client from `node_modules/ws` connected to `ws://127.0.0.1:18901/feed/v1`; `feed-frames.jsonl` received `schema: agentagotchi.feed.v1`, terminal task, and only allowlisted task keys. |
 | Exact prescribed reverse dismissal (`seenRevision` copied from Home feed) | **FAIL → FIXED, re-run PASS** | First run failed `stale`: devices only see the Home's merged revision (per-task origin revisions are stripped by the privacy projection), but the Edge validated against its own sequence. Fix: Home fails fast on a device-stale view, then translates `seenRevision` to the owning Edge's last-known revision before forwarding (`home-do.ts`, `presence.originRevisionOf`). |
 | Reverse route convergence after dismissal | **FAIL → FIXED, re-run PASS** | Home-relayed dismissals/focuses mutated the Edge core but never emitted the change signal, so no fresh snapshot flowed upstream and focus-success did not acknowledge. Fix: `UpstreamClient.SetOnChange(s.signal)` + acknowledge-on-ok mirroring the direct path (`upstream.go`); tests `TestHomeRelayedDismissalConverges`, `TestHomeRelayedFocusAcknowledgesTerminal`. |
 | Action-result schema tag on relayed results | **FAIL → FIXED** | Relayed `action_result` reached the device tagged `agentagotchi.upstream.v1`; Home now re-tags to `agentagotchi.feed.v1`. |

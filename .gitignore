@@ -1,6 +1,7 @@
 /work/
-/home/node_modules/
-/home/.dev.vars
+/node_modules/
+/packages/*/node_modules/
+/packages/home/.dev.vars
 /firmware/build/
 /firmware/.cache/
 /firmware/managed_components/
@@ -11,4 +12,4 @@ __pycache__/
 .DS_Store
 *.log
 /clients/macos-admin/.build/
-/home/.wrangler/
+/packages/home/.wrangler/

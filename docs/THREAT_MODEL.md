@@ -72,7 +72,7 @@ Boundaries:
 ### Privacy-safe persistence and logging
 
 - *Content leakage into wire payloads*: wire structs are allowlist-only by
-  construction (Go `internal/contract`, TS `home/src/wire.ts`); both runtimes
+  construction (Go `internal/contract`, TS `packages/home/src/wire.ts`); both runtimes
   fail closed on unknown fields and unknown schemas. Structural tests prove
   private fields cannot be serialized.
 - *Leakage into persistence*: Edge persists generation + aliases + pairing

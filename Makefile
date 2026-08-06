@@ -52,3 +52,5 @@ test: assets firmware-test
 	"$(VENV_PYTHON)" -m unittest tools/test_pet_assets.py -v
 	"$(VENV_PYTHON)" -m unittest tools/test_release_contracts.py -v
 	$(MAKE) plugin-validate
+	@command -v npm >/dev/null 2>&1 && [ -d node_modules ] && npm test || \
+		echo "skipping TS suites (run 'npm install' once at the repo root)"

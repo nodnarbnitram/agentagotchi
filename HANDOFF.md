@@ -594,7 +594,7 @@ semantic core
 edge service
 home service
 adapters/codex
-adapters/pi
+packages/pi-adapter
 pairing/auth
 feed protocol
 edge-upstream protocol

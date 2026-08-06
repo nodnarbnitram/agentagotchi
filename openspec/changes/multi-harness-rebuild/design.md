@@ -29,7 +29,7 @@ Edges paired to Home in this change.
 **Goals:**
 
 - A role-separated repository: `semantic core`, `edge service`, `home service`,
-  `adapters/codex`, `adapters/pi`, `pairing/auth`, `feed protocol`,
+  `internal/adapters/codex`, `packages/pi-adapter`, `internal/pairing`, `feed protocol`,
   `edge-upstream protocol`, `administration API`, `edge Native SDK app`,
   `home web app`, and `firmware`, with boundaries that keep host-event
   reduction, transport, persistence, and UI policy out of the semantic store.
