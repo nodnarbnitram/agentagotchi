@@ -116,9 +116,19 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("#define WS_RX_MAX 8192", network)
         self.assertIn('"wss://%s:%d/feed/v1"', network)
         self.assertIn("agentagotchi.feed.v1", network)
+        # Task stacks MUST be internal RAM: the Xtensa context-switch path
+        # cannot touch PSRAM. A previous contract asserted SPIRAM-caps stacks
+        # and real hardware faulted; assert the safe invariant instead.
         for source in (audio, sensors, network):
-            self.assertIn("xTaskCreatePinnedToCoreWithCaps(", source)
-            self.assertIn("MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT", source)
+            self.assertIn("xTaskCreatePinnedToCore(", source)
+            task_sections = re.findall(
+                r"xTaskCreatePinnedToCore\([^;]+\)", source, flags=re.S
+            )
+            self.assertTrue(task_sections, "expected a task creation site")
+            for section in task_sections:
+                self.assertNotIn("MALLOC_CAP_SPIRAM", section)
+        # Large buffers MAY use PSRAM heap (feed slots, pet pixels, UI queue).
+        self.assertIn("MALLOC_CAP_SPIRAM", network)
 
     def test_launch_agent_contract(self) -> None:
         template = (ROOT / "packaging/com.agentagotchi.edge.plist.in").read_text(
