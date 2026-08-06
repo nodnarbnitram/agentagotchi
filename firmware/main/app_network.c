@@ -410,12 +410,30 @@ static bool discovered_ipv4(
     return false;
 }
 
+static bool resolve_local_ipv4(const char *hostname, char *host, size_t host_capacity)
+{
+    /* Returns true when hostname is not .local (nothing to do) or was
+     * resolved to a dotted IPv4 string written into host. */
+    const char *suffix = strstr(hostname, ".local");
+    if (suffix == NULL || suffix[6] != '\0') {
+        return true;
+    }
+    esp_ip4_addr_t addr = {0};
+    if (mdns_query_a(hostname, 2000, &addr) != ESP_OK || addr.addr == 0) {
+        return false;
+    }
+    int length = snprintf(host, host_capacity, IPSTR, IP2STR(&addr));
+    return length > 0 && length < (int)host_capacity;
+}
+
 static void discover_bridge(char *host, size_t host_capacity, int *port)
 {
     /* mDNS is only used for one-shot bridge discovery; its task/PCB/buffers
      * cost ~16 KB of internal RAM, which the four-feed budget cannot hold
      * permanently alongside Wi-Fi and the websocket client. Free it after
-     * every query and re-init on the next reconnect. */
+     * every query and re-init on the next reconnect. Because the TLS stack
+     * cannot resolve .local names afterwards, the host handed back —
+     * discovered or provisioned fallback — must be a dotted IPv4. */
     mdns_result_t *results = NULL;
     if (mdns_init() != ESP_OK ||
         mdns_query_ptr("_agentagotchi", "_tcp", 2500, 4, &results) != ESP_OK) {
@@ -426,11 +444,21 @@ static void discover_bridge(char *host, size_t host_capacity, int *port)
         if (result->hostname == NULL || result->hostname[0] == '\0' || result->port == 0) {
             continue;
         }
-        if (!discovered_ipv4(result, host, host_capacity)) {
+        char discovered[APP_HOST_MAX] = {0};
+        if (discovered_ipv4(result, discovered, sizeof(discovered))) {
+            snprintf(host, host_capacity, "%s", discovered);
+        } else {
+            /* The PTR answer arrived before the A record; resolve explicitly
+             * while mDNS is alive. */
+            char fqdn[96];
             if (strchr(result->hostname, '.') == NULL) {
-                snprintf(host, host_capacity, "%s.local", result->hostname);
+                snprintf(fqdn, sizeof(fqdn), "%s.local", result->hostname);
             } else {
-                snprintf(host, host_capacity, "%s", result->hostname);
+                snprintf(fqdn, sizeof(fqdn), "%s", result->hostname);
+            }
+            if (!resolve_local_ipv4(fqdn, host, host_capacity)) {
+                ESP_LOGW(TAG, "bridge at %s has no IPv4 yet; keeping provisioned host", fqdn);
+                continue;
             }
         }
         *port = result->port;
@@ -438,6 +466,12 @@ static void discover_bridge(char *host, size_t host_capacity, int *port)
         break;
     }
     mdns_query_results_free(results);
+
+    /* The provisioned fallback host is usually a .local name; resolve it too
+     * or the TLS dial below would fail with CANNOT_RESOLVE_HOSTNAME. */
+    if (!resolve_local_ipv4(host, host, host_capacity)) {
+        ESP_LOGW(TAG, "could not resolve %s to IPv4; will retry", host);
+    }
     (void)mdns_free();
 }
 
