@@ -1,4 +1,6 @@
 /work/
+/home/node_modules/
+/home/.dev.vars
 /firmware/build/
 /firmware/.cache/
 /firmware/managed_components/
@@ -8,3 +10,4 @@ __pycache__/
 *.py[cod]
 .DS_Store
 *.log
+/clients/macos-admin/.build/
