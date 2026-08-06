@@ -8,7 +8,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -37,24 +40,38 @@ type UpstreamClient struct {
 	edgeID string
 	router *Router
 
-	mu      sync.Mutex
-	conn    *upstreamConn
-	lastRev uint64
-	lastGen uint64
+	mu       sync.Mutex
+	conn     *upstreamConn
+	lastRev  uint64
+	lastGen  uint64
+	onChange func()
+	logger   *log.Logger
 }
 
 func NewUpstreamClient(cfg UpstreamConfig, core *presence.Core, edgeID string, router *Router) *UpstreamClient {
 	return &UpstreamClient{cfg: cfg, core: core, edgeID: edgeID, router: router}
 }
 
-// Run keeps the upstream connected until ctx ends.
+// Run keeps the upstream connected until ctx ends. Dial/handshake failures
+// are logged (distinctly for 401, which usually means a revoked credential);
+// transport drops after a healthy session retry quietly.
 func (u *UpstreamClient) Run(ctx context.Context) {
 	for {
 		err := u.connectOnce(ctx)
 		if ctx.Err() != nil {
 			return
 		}
-		_ = err
+		if err != nil && u.logger != nil {
+			var hs *HandshakeError
+			switch {
+			case errors.As(err, &hs) && hs.StatusCode == http.StatusUnauthorized:
+				u.logger.Printf("upstream rejected the edge-ingress credential (401); it may be revoked — re-pair")
+			case errors.As(err, &hs):
+				u.logger.Printf("upstream handshake failed: %v", err)
+			default:
+				u.logger.Printf("upstream connection ended: %v", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -110,6 +127,16 @@ func (u *UpstreamClient) connectOnce(ctx context.Context) error {
 			result = u.dismiss(feedAction)
 		} else {
 			result = u.router.Dispatch(ctx, feedAction)
+			if result.Status == "ok" {
+				// Mirror the direct feed path: exact success on a terminal target
+				// also acknowledges it.
+				_ = u.core.Acknowledge(request.TaskPresenceID)
+			}
+		}
+		if result.Status == "ok" && u.onChange != nil {
+			// Any successful mutation must converge every surface: local feeds
+			// broadcast and the Home receives a fresh absolute snapshot.
+			u.onChange()
 		}
 		result.Schema = contract.SchemaUpstreamV1
 		payload, err := json.Marshal(result)
@@ -145,6 +172,21 @@ func (u *UpstreamClient) dismiss(action contract.FeedAction) contract.ActionResu
 	}
 	result.Status = "ok"
 	return result
+}
+
+// SetOnChange wires the Edge's change signal so Home-relayed mutations
+// converge local feeds and upstream state. Called once during Service setup.
+func (u *UpstreamClient) SetOnChange(fn func()) {
+	u.mu.Lock()
+	u.onChange = fn
+	u.mu.Unlock()
+}
+
+// SetLogger wires the Edge logger for upstream connection diagnostics.
+func (u *UpstreamClient) SetLogger(logger *log.Logger) {
+	u.mu.Lock()
+	u.logger = logger
+	u.mu.Unlock()
 }
 
 // NotifySnapshot pushes the current absolute snapshot when connected. Called

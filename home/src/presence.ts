@@ -88,6 +88,32 @@ export class HomePresence {
     return this.homeRevision;
   }
 
+  /** Serialize presence for Durable Object storage (privacy-safe: only the
+   * allowlisted merged model and ordering metadata). */
+  dump(): { edges: EdgeContribution[]; homeRevision: number } {
+    return { edges: [...this.edges.values()], homeRevision: this.homeRevision };
+  }
+
+  /** Restore from storage; pairing/admin state loads separately. */
+  static load(homeId: string, data: { edges?: EdgeContribution[]; homeRevision?: number } | undefined): HomePresence {
+    const presence = new HomePresence(homeId);
+    if (data !== undefined) {
+      for (const contribution of data.edges ?? []) {
+        presence.edges.set(contribution.edgeId, contribution);
+      }
+      presence.homeRevision = data.homeRevision ?? 0;
+    }
+    return presence;
+  }
+
+  /**
+   * The owning Edge's revision as of its last applied snapshot — the value a
+   * relayed action's seenRevision must be translated into before forwarding.
+   */
+  originRevisionOf(edgeId: string): number | undefined {
+    return this.edges.get(edgeId)?.revision;
+  }
+
   edgeIds(): string[] {
     return [...this.edges.keys()];
   }

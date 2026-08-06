@@ -218,3 +218,155 @@ func TestUpstreamAuthFailureDoesNotRetryStorm(t *testing.T) {
 	defer cancel()
 	client.Run(ctx) // must return cleanly on ctx timeout, no panic
 }
+
+// TestHomeRelayedDismissalConverges proves the reverse action path triggers
+// the Edge's change signal: a Home-relayed acknowledge on a terminal task
+// removes it locally AND pushes a fresh absolute snapshot upstream.
+func TestHomeRelayedDismissalConverges(t *testing.T) {
+	home := newFakeHome(t, "home-cred-token")
+
+	s := newTestServiceDir(t, shortDataDir(t, "dismiss"), 18794)
+	lease, err := s.core.Attach("codex", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.core.ApplyReports(lease.ID, 1, []presence.Report{{
+		NativeSessionID: "native-terminal", SafeTitle: "Codex",
+		State: presence.StateReady, Reason: presence.ReasonCompleted,
+	}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := s.core.TaskPresenceIDFor("codex", "native-terminal")
+
+	client := NewUpstreamClient(UpstreamConfig{
+		URL: home.url(), Token: "home-cred-token", InsecureSkipVerify: true,
+	}, s.core, s.edgeID, s.router)
+	// Wire the change signal the way Service does: onChange drives push.
+	client.SetOnChange(client.NotifySnapshot)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go client.Run(ctx)
+
+	var conn *ws.Conn
+	select {
+	case conn = <-home.conn:
+	case <-time.After(5 * time.Second):
+		t.Fatal("home never received upstream connection")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && home.snapshotCount() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if home.snapshotCount() == 0 {
+		t.Fatal("no initial snapshot")
+	}
+
+	// Home relays an acknowledge with the Edge's current revision (which the
+	// Home supplies via seenRevision translation).
+	revision := home.lastSnapshot().Revision
+	request := contract.UpstreamActionRequest{
+		Schema: contract.SchemaUpstreamV1, Type: "action_request",
+		ActionID: "home-ack-1", Capability: contract.CapabilityAcknowledge,
+		TaskPresenceID: id, SeenRevision: revision,
+	}
+	payload, _ := json.Marshal(request)
+	if err := conn.WriteText(payload); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case result := <-home.result:
+		if result.Status != "ok" {
+			t.Fatalf("action_result = %+v, want ok", result)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no action_result returned to home")
+	}
+
+	// The mutation converged upstream without any external poke: a fresh
+	// snapshot with the task removed arrives because onChange fired.
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if home.snapshotCount() >= 2 && len(home.lastSnapshot().Tasks) == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("no converged snapshot after relayed dismissal; snapshots=%d last=%+v",
+		home.snapshotCount(), home.lastSnapshot())
+}
+
+// TestHomeRelayedFocusAcknowledgesTerminal proves a successful Home-relayed
+// focus on a terminal task acknowledges it, mirroring the direct feed path.
+func TestHomeRelayedFocusAcknowledgesTerminal(t *testing.T) {
+	home := newFakeHome(t, "home-cred-token")
+
+	s := newTestServiceDir(t, shortDataDir(t, "focusack"), 18795)
+	lease, err := s.core.Attach("codex", []contract.Capability{contract.CapabilityFocus})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.core.ApplyReports(lease.ID, 1, []presence.Report{{
+		NativeSessionID: "native-t", SafeTitle: "Codex",
+		State: presence.StateReady, Reason: presence.ReasonCompleted,
+	}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := s.core.TaskPresenceIDFor("codex", "native-t")
+	if err := s.core.SetCapabilities(id, []contract.Capability{contract.CapabilityFocus}); err != nil {
+		t.Fatal(err)
+	}
+	s.router.Register("codex", contract.CapabilityFocus, func(_ context.Context, _ string, _ contract.FeedAction) error {
+		return nil
+	})
+
+	client := NewUpstreamClient(UpstreamConfig{
+		URL: home.url(), Token: "home-cred-token", InsecureSkipVerify: true,
+	}, s.core, s.edgeID, s.router)
+	client.SetOnChange(client.NotifySnapshot)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go client.Run(ctx)
+
+	var conn *ws.Conn
+	select {
+	case conn = <-home.conn:
+	case <-time.After(5 * time.Second):
+		t.Fatal("home never received upstream connection")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && home.snapshotCount() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	revision := home.lastSnapshot().Revision
+	payload, _ := json.Marshal(contract.UpstreamActionRequest{
+		Schema: contract.SchemaUpstreamV1, Type: "action_request",
+		ActionID: "home-focus-ack", Capability: contract.CapabilityFocus,
+		TaskPresenceID: id, SeenRevision: revision,
+	})
+	if err := conn.WriteText(payload); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case result := <-home.result:
+		if result.Status != "ok" {
+			t.Fatalf("action_result = %+v, want ok", result)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no action_result returned to home")
+	}
+	// Acknowledged terminal task disappears from the core and the converged
+	// upstream snapshot.
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.core.HasTask(id) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if home.snapshotCount() >= 2 && len(home.lastSnapshot().Tasks) == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("focus success did not acknowledge and converge upstream")
+}

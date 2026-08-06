@@ -59,7 +59,8 @@ export class HomeDurableObject {
     const stored = await this.ctx.storage.get<{
       ceremony?: ReturnType<PairingCeremony["dump"]>;
       adminPasswordHash?: string;
-      presenceRevision?: number;
+      presence?: ReturnType<HomePresence["dump"]>;
+      sessions?: SessionRecord[];
     }>("home");
     if (stored?.ceremony) {
       this.ceremony = PairingCeremony.load(stored.ceremony);
@@ -67,13 +68,23 @@ export class HomeDurableObject {
     if (stored?.adminPasswordHash) {
       this.adminPasswordHash = stored.adminPasswordHash;
     }
+    this.presence = HomePresence.load(this.homeId, stored?.presence);
+    for (const session of stored?.sessions ?? []) {
+      if (Date.now() - Date.parse(session.createdAt) <= SESSION_TTL_MS) {
+        this.sessions.set(session.token, session);
+      }
+    }
     this.loaded = true;
   }
 
+  // Persistence covers the full one-Home state per spec 5.2: privacy-safe
+  // presence model, pairing state, admin credentials, and sessions.
   private async persist(): Promise<void> {
     await this.ctx.storage.put("home", {
       ceremony: this.ceremony.dump(),
       adminPasswordHash: this.adminPasswordHash ?? undefined,
+      presence: this.presence.dump(),
+      sessions: [...this.sessions.values()],
     });
   }
 
@@ -110,9 +121,13 @@ export class HomeDurableObject {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const edgeId = cred.clientName; // Stable Edge identity from the credential grant.
-    this.ctx.acceptWebSocket(server, ["edge", edgeId]);
-    server.serializeAttachment({ kind: "edge", edgeId, token: cred.token });
+    // The credential authenticates the connection; the Edge's stable identity
+    // is the snapshot's edgeId (cert-derived at the Edge). The contribution is
+    // keyed by edgeId once the first valid snapshot arrives; until then the
+    // socket is tracked under a per-connection label for revocation sweeps.
+    const connectionId = crypto.randomUUID();
+    this.ctx.acceptWebSocket(server, ["edge", connectionId]);
+    server.serializeAttachment({ kind: "edge", edgeId: "", connectionId, token: cred.token });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -139,7 +154,8 @@ export class HomeDurableObject {
       | { kind: "device" }
       | null;
     if (attachment?.kind === "edge") {
-      if (this.presence.removeEdge(attachment.edgeId)) {
+      if (attachment.edgeId !== "" && this.presence.removeEdge(attachment.edgeId)) {
+        await this.persist();
         this.broadcastFeed();
       }
     }
@@ -164,11 +180,23 @@ export class HomeDurableObject {
     }
     if (envelope.type === "snapshot") {
       const snapshot = validateUpstreamSnapshot(frame);
-      if (snapshot === null || snapshot.edgeId !== attachment.edgeId) {
+      if (snapshot === null) {
         ws.close(1003, "invalid snapshot");
         return;
       }
+      if (attachment.edgeId === "") {
+        // First valid snapshot binds the Edge's stable identity to this
+        // connection (and re-tags for hibernation-safe lookups).
+        attachment.edgeId = snapshot.edgeId;
+        ws.serializeAttachment(attachment);
+      } else if (snapshot.edgeId !== attachment.edgeId) {
+        // One connection, one Edge identity — a mid-stream identity change is
+        // a protocol violation; fail closed.
+        ws.close(1003, "edge identity changed");
+        return;
+      }
       if (this.presence.applySnapshot(snapshot)) {
+        await this.persist();
         this.broadcastFeed();
       }
       return;
@@ -178,7 +206,14 @@ export class HomeDurableObject {
       const pending = this.pendingActions.get(result.actionId);
       if (pending !== undefined) {
         this.pendingActions.delete(result.actionId);
-        this.sendJson(pending, result);
+        // Re-tag to the feed schema: the device speaks agentagotchi.feed.v1
+        // and must never see the upstream schema.
+        this.sendJson(pending, {
+          schema: SCHEMA_FEED,
+          type: "action_result",
+          actionId: result.actionId,
+          status: result.status,
+        } satisfies ActionResult);
       }
       return;
     }
@@ -239,8 +274,18 @@ export class HomeDurableObject {
     if (!DISMISSAL.has(action.capability) && !capabilities.includes(action.capability)) {
       return reply("unsupported");
     }
+    // The device's seenRevision refers to the Home's merged feed revision —
+    // the only revision a device can see (per-task origin revisions are
+    // stripped from the privacy-safe feed projection). Fail fast if the
+    // device's view is stale, then translate to the owning Edge's last-known
+    // revision, which is the sequence the Edge validates against. A
+    // concurrent Edge-side change still fails closed at the Edge; the fresh
+    // snapshot that follows lets the device retry (actions are never queued).
+    if (action.seenRevision !== this.presence.revision()) return reply("stale");
     const ownerEdgeId = this.presence.ownerOf(action.taskPresenceId);
     if (ownerEdgeId === undefined) return reply("stale");
+    const originRevision = this.presence.originRevisionOf(ownerEdgeId);
+    if (originRevision === undefined) return reply("stale");
     const edgeSocket = this.findEdgeSocket(ownerEdgeId);
     if (edgeSocket === null) {
       // Never reroute, never invent, never queue.
@@ -252,7 +297,7 @@ export class HomeDurableObject {
       actionId: action.actionId,
       capability: action.capability,
       taskPresenceId: action.taskPresenceId,
-      seenRevision: action.seenRevision,
+      seenRevision: originRevision,
     };
     this.pendingActions.set(action.actionId, ws);
     this.sendJson(edgeSocket, request);
@@ -362,6 +407,8 @@ export class HomeDurableObject {
     this.sessions.set(token, {
       token, csrf, createdAt: new Date().toISOString(),
     });
+    // Persist so an idle-evicted Durable Object does not log the admin out.
+    this.ctx.waitUntil(this.persist());
     const headers = new Headers({
       "set-cookie": `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`,
       "x-csrf-token": csrf,

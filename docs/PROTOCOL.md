@@ -136,12 +136,20 @@ Edge sends complete-replacement **upstream snapshots**:
 
 Semantics:
 
+- The pairing credential authenticates the connection; the Edge's stable
+  identity is the snapshot's `edgeId` (derived from the Edge's TLS identity).
+  The first valid snapshot on a connection binds that `edgeId`; a mid-stream
+  identity change fails closed (the Home closes the connection).
 - The Home replaces only that Edge's prior contribution (`docs/adr/0004`);
   other Edges' contributions are untouched.
 - `generation` + `revision` implement stale/replay rejection; a gap or reset
   discards and resynchronizes from the newest absolute snapshot.
 - The Home never reroutes actions to a different Edge, invents capabilities,
   or queues actions (`docs/adr/0006`).
+- Reverse actions carry `seenRevision` in the owning Edge's sequence: the
+  Home translates the device's feed-revision `seenRevision` into the owning
+  Edge's last-known revision before forwarding, after rejecting device views
+  stale against the Home's merged revision.
 
 Reverse routing (Home → Edge on the same connection):
 

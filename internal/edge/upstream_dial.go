@@ -1,4 +1,6 @@
-// Client-side WebSocket (WSS) dialing for the upstream Edge→Home connection.
+// Client-side WebSocket dialing for the upstream Edge→Home connection.
+// Plaintext ws:// is accepted only for loopback local development; remote
+// upstreams remain fail-closed on WSS.
 package edge
 
 import (
@@ -24,15 +26,28 @@ func dialWSS(ctx context.Context, rawURL, token string, tlsConfig *tls.Config) (
 	if err != nil {
 		return nil, nil, err
 	}
-	if u.Scheme != "wss" {
+	if u.Scheme != "wss" && u.Scheme != "ws" {
 		return nil, nil, fmt.Errorf("upstream URL must be wss://, got %q", u.Scheme)
 	}
-	host := u.Host
-	if !strings.Contains(host, ":") {
-		host += ":443"
+	if u.Scheme == "ws" && !isLoopbackHost(u.Hostname()) {
+		return nil, nil, fmt.Errorf("plaintext upstream URL is only allowed for loopback hosts, got %q", u.Hostname())
 	}
+	port := u.Port()
+	if port == "" {
+		if u.Scheme == "ws" {
+			port = "80"
+		} else {
+			port = "443"
+		}
+	}
+	host := net.JoinHostPort(u.Hostname(), port)
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := tlsConfigDial(ctx, dialer, host, tlsConfig, u.Hostname())
+	var conn net.Conn
+	if u.Scheme == "ws" {
+		conn, err = dialer.DialContext(ctx, "tcp", host)
+	} else {
+		conn, err = tlsConfigDial(ctx, dialer, host, tlsConfig, u.Hostname())
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -63,9 +78,28 @@ func dialWSS(ctx context.Context, rawURL, token string, tlsConfig *tls.Config) (
 	}
 	if response.StatusCode != http.StatusSwitchingProtocols {
 		conn.Close()
-		return nil, nil, fmt.Errorf("upstream handshake status %d", response.StatusCode)
+		return nil, nil, &HandshakeError{StatusCode: response.StatusCode}
 	}
 	return conn, reader, nil
+}
+
+// HandshakeError is a non-101 upstream handshake response; StatusCode lets
+// callers distinguish revoked credentials (401) from other failures.
+type HandshakeError struct {
+	StatusCode int
+}
+
+func (e *HandshakeError) Error() string {
+	return fmt.Sprintf("upstream handshake status %d", e.StatusCode)
+}
+
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(strings.TrimSuffix(host, ".")) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func tlsConfigDial(ctx context.Context, dialer *net.Dialer, host string, tlsConfig *tls.Config, serverName string) (net.Conn, error) {

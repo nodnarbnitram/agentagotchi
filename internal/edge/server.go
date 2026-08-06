@@ -140,6 +140,8 @@ func NewService(opts Options) (*Service, error) {
 	s.authenticator = authenticator
 	if opts.Upstream != nil {
 		s.upstream = NewUpstreamClient(*opts.Upstream, core, s.edgeID, s.router)
+		s.upstream.SetOnChange(s.signal)
+		s.upstream.SetLogger(opts.Logger)
 		s.notifyUpstream = make(chan struct{}, 1)
 	}
 	focus := codex.FocusHandler(opts.FocusRunner)

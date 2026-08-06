@@ -178,5 +178,38 @@ await t("pairing: persistence round trip", () => {
   assert.equal(restored.authenticate(cred.token)?.id, cred.id);
 });
 
-console.log(`${passed}/12 tests passed`);
+
+await t("presence: originRevisionOf returns owning edge's last-known revision", () => {
+  const home = new HomePresence("home-1");
+  home.applySnapshot(snapshot("edge-a", 1, 7, [task(UUID_A)]));
+  home.applySnapshot(snapshot("edge-b", 1, 3, [task(UUID_B)]));
+  assert.equal(home.originRevisionOf("edge-a"), 7);
+  assert.equal(home.originRevisionOf("edge-b"), 3);
+  assert.equal(home.originRevisionOf("edge-c"), undefined);
+  // Advancing edge-a advances only edge-a's origin revision.
+  home.applySnapshot(snapshot("edge-a", 1, 8, [task(UUID_A)]));
+  assert.equal(home.originRevisionOf("edge-a"), 8);
+  assert.equal(home.originRevisionOf("edge-b"), 3);
+  // Removal drops it.
+  home.removeEdge("edge-a");
+  assert.equal(home.originRevisionOf("edge-a"), undefined);
+});
+
+
+await t("presence: dump/load round trip preserves contributions and revision", () => {
+  const home = new HomePresence("home-1");
+  home.applySnapshot(snapshot("edge-a", 1, 5, [task(UUID_A)]));
+  home.applySnapshot(snapshot("edge-b", 2, 3, [task(UUID_B, { safeTitle: "Pi" })]));
+  const restored = HomePresence.load("home-1", home.dump());
+  assert.equal(restored.revision(), home.revision());
+  assert.equal(restored.originRevisionOf("edge-a"), 5);
+  assert.equal(restored.originRevisionOf("edge-b"), 3);
+  assert.equal(restored.mergedTasks().length, 2);
+  assert.equal(restored.ownerOf(UUID_B), "edge-b");
+  // Stale rejection still works after restore.
+  assert.equal(restored.applySnapshot(snapshot("edge-a", 1, 5, [task(UUID_A)])), false);
+  assert.equal(restored.applySnapshot(snapshot("edge-a", 1, 6, [task(UUID_A)])), true);
+});
+
+console.log(`${passed}/14 tests passed`);
 process.exit(process.exitCode ?? 0);
