@@ -238,7 +238,10 @@ static int connected_feed_count(network_context_t *context)
 static void post_network_state(network_context_t *context)
 {
     int connected = connected_feed_count(context);
-    app_ui_event_t event = {
+    /* The event union embeds a full snapshot; keep it off the task stack.
+     * post_network_state runs only on the network task. */
+    static app_ui_event_t event;
+    event = (app_ui_event_t){
         .type = APP_UI_EVENT_NETWORK,
         .data.network = {
             .websocket_connected = connected > 0,
@@ -593,7 +596,9 @@ static void network_task(void *argument)
                 esp_wifi_sta_get_ap_info(&access_point) == ESP_OK) {
                 rssi = access_point.rssi;
             }
-            app_ui_event_t event = {
+            /* Same union-on-stack hazard; network task only. */
+            static app_ui_event_t event;
+            event = (app_ui_event_t){
                 .type = APP_UI_EVENT_NETWORK,
                 .data.network = {
                     .websocket_connected = false,
@@ -683,15 +688,15 @@ esp_err_t app_network_start(const app_settings_t *settings)
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wifi_config), TAG, "set Wi-Fi config");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start Wi-Fi");
 
-    if (xTaskCreatePinnedToCoreWithCaps(
+    /* Task stacks must be internal RAM (Xtensa context switch). */
+    if (xTaskCreatePinnedToCore(
             network_task,
             "pet_network",
             8192,
             &s_network,
             5,
             NULL,
-            0,
-            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+            0) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

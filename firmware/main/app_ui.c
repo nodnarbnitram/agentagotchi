@@ -23,6 +23,10 @@
 #include "sensor_math.h"
 
 #define STATUS_BAR_HEIGHT 20
+/* LVGL rows are real objects with real RAM cost; the tray virtualizes the
+ * 64-task data model down to a bounded visible set. Priority ordering means
+ * the tasks most worth acting on are always within the rendered window. */
+#define APP_UI_MAX_ROWS 16
 #define PET_WIDTH 192
 #define PET_HEIGHT 144
 #define UI_TIMER_MS 100
@@ -83,9 +87,9 @@ typedef struct {
     lv_obj_t *counts_label;
     lv_obj_t *subagents_label;
     lv_obj_t *task_tray;
-    lv_obj_t *tray_rows[APP_MAX_TASKS];
-    lv_obj_t *tray_state_labels[APP_MAX_TASKS];
-    lv_obj_t *tray_labels[APP_MAX_TASKS];
+    lv_obj_t *tray_rows[APP_UI_MAX_ROWS];
+    lv_obj_t *tray_state_labels[APP_UI_MAX_ROWS];
+    lv_obj_t *tray_labels[APP_UI_MAX_ROWS];
 
     int rendered_wifi_bars;
     int rendered_battery_percent;
@@ -437,7 +441,7 @@ static void reconcile_featured_task(void)
 
 static void update_tray(void)
 {
-    for (int i = 0; i < APP_MAX_TASKS; ++i) {
+    for (int i = 0; i < APP_UI_MAX_ROWS; ++i) {
         if (i < s_ui.snapshot.task_count) {
             app_task_t *task = &s_ui.snapshot.tasks[i];
             lv_obj_remove_flag(s_ui.tray_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -1007,7 +1011,7 @@ static void build_ui(void *argument)
         s_ui.task_tray, &lv_font_montserrat_18, lv_color_hex(0xF1F5F7), LV_TEXT_ALIGN_LEFT);
     lv_label_set_text(tray_title, "Tasks");
     lv_obj_set_pos(tray_title, 4, 0);
-    for (int i = 0; i < APP_MAX_TASKS; ++i) {
+    for (int i = 0; i < APP_UI_MAX_ROWS; ++i) {
         s_ui.tray_rows[i] = lv_obj_create(s_ui.task_tray);
         lv_obj_set_pos(s_ui.tray_rows[i], 4, TRAY_TITLE_HEIGHT + i * TRAY_ROW_HEIGHT);
         lv_obj_set_size(s_ui.tray_rows[i], 292, TRAY_ROW_HEIGHT - 2);
@@ -1079,6 +1083,11 @@ esp_err_t app_ui_start(const app_settings_t *settings)
     if (s_ui.pet_pixels == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    /* The draw buffer must stay DMA-capable (internal RAM): the ILI9341 SPI
+     * driver transmits it via DMA, and PSRAM buffers stall the flush path
+     * (wait_for_flushing spins, task watchdog fires). The four-feed rework
+     * made the BSP default (height 100 = 64 KB) too large, so sdkconfig
+     * drops BSP_LCD_DRAW_BUF_HEIGHT to 40 (25.6 KB). */
     if (bsp_display_start() == NULL) {
         return ESP_FAIL;
     }
