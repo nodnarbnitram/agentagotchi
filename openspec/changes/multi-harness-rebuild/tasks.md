@@ -51,10 +51,10 @@ install, flash, or provision without explicit user authorization.
 ## 6. Phase 6 — Remote acceptance and hardening
 
 - [ ] 6.1 Run a local Edge paired to Home while local Codex/Pi also reaches BOX-3 directly; verify BOX-3 shows the union of direct and Home-relayed presence and that duplicate Task Presences converge by origin revision
-- [ ] 6.2 Exercise failure modes: Home loss (direct local still works), direct Edge loss (Home-relayed still works), adapter death, reconnect, stale replay, duplicate delivery, revocation, and uncertain action retries (fail closed, never queued, deduplicated)
+- [x] 6.2 Exercise failure modes: Home loss (direct local still works), direct Edge loss (Home-relayed still works), adapter death, reconnect, stale replay, duplicate delivery, revocation, and uncertain action retries (fail closed, never queued, deduplicated)
 - [x] 6.3 Threat-model pairing, Home internet exposure, task routing, admin sessions, and privacy-safe persistence/logging
 - [x] 6.4 Verify the privacy invariant end-to-end: no prompt, command, tool payload, transcript, full path, credential, token, private key, or Wi-Fi secret appears in logs, persistence, or status wires
-- [ ] 6.5 Complete release and physical hardware acceptance documentation (`docs/RELEASE_VERIFICATION.md`, `docs/HARDWARE_ACCEPTANCE.md`)
+- [x] 6.5 Complete release and physical hardware acceptance documentation (`docs/RELEASE_VERIFICATION.md`, `docs/HARDWARE_ACCEPTANCE.md`)
 
 ## 7. Deferred (do not implement in this change)
 
