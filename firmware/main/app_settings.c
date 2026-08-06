@@ -55,10 +55,10 @@ static void pairing_key(char *key, size_t capacity, int slot, const char *suffix
 static esp_err_t load_pairing(nvs_handle_t nvs, int slot, app_feed_pairing_t *pairing)
 {
     char key[16];
-    int32_t port = 8787;
+    int32_t port = 6571;
     uint8_t enabled = 0;
     memset(pairing, 0, sizeof(*pairing));
-    pairing->port = 8787;
+    pairing->port = 6571;
 
     pairing_key(key, sizeof(key), slot, "enabled");
     (void)nvs_get_u8(nvs, key, &enabled);
@@ -83,7 +83,7 @@ esp_err_t app_settings_load(app_settings_t *settings)
     memset(settings, 0, sizeof(*settings));
     settings->temp_unit = 'F';
     for (int i = 0; i < APP_MAX_FEED_SLOTS; ++i) {
-        settings->pairings[i].port = 8787;
+        settings->pairings[i].port = 6571;
     }
 
     nvs_handle_t nvs;
@@ -123,7 +123,7 @@ esp_err_t app_settings_load(app_settings_t *settings)
         char legacy_host[APP_HOST_MAX] = {0};
         char legacy_token[APP_TOKEN_MAX] = {0};
         char legacy_ca[APP_CA_PEM_MAX] = {0};
-        int32_t legacy_port = 8787;
+        int32_t legacy_port = 6571;
         (void)read_string(nvs, "host", legacy_host, sizeof(legacy_host));
         (void)nvs_get_i32(nvs, "port", &legacy_port);
         (void)read_string(nvs, "token", legacy_token, sizeof(legacy_token));
@@ -298,7 +298,7 @@ esp_err_t app_settings_wait_for_provision(app_settings_t *settings)
         return ESP_ERR_NO_MEM;
     }
     for (int i = 0; i < APP_MAX_FEED_SLOTS; ++i) {
-        candidate->pairings[i].port = 8787;
+        candidate->pairings[i].port = 6571;
     }
     candidate->temp_unit = 'F';
     ESP_LOGI(TAG, "waiting for USB provisioning");
@@ -324,7 +324,7 @@ esp_err_t app_settings_wait_for_provision(app_settings_t *settings)
         line_length = 0;
         secure_clear(candidate, sizeof(*candidate));
         for (int i = 0; i < APP_MAX_FEED_SLOTS; ++i) {
-            candidate->pairings[i].port = 8787;
+            candidate->pairings[i].port = 6571;
         }
         candidate->temp_unit = 'F';
         if (parse_provision(line, candidate) != ESP_OK) {

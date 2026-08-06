@@ -88,7 +88,7 @@ Record results here from real-kit runs only — never from compilation.
 
 Kit: ESP32-S3-BOX-3 (USB Serial/JTAG `/dev/cu.usbmodem2112301`), ESP-IDF v5.5.1,
 firmware commit `d81d3c7`+uncommitted network fixes, Edge v0.2.0 on macOS
-(wss://brandons-macbook-pro-2.local:8787/feed/v1).
+(wss://brandons-macbook-pro-2.local:6571/feed/v1).
 
 Real-hardware defects found and fixed this run (all committed):
 

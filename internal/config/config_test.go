@@ -14,7 +14,7 @@ func TestEnsureIdentityCreatesPinnedCAProfileAndPrivateFiles(t *testing.T) {
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	id, err := EnsureIdentity(dir, "agentagotchi.local", 8787)
+	id, err := EnsureIdentity(dir, "agentagotchi.local", 6571)
 	if err != nil {
 		t.Fatal(err)
 	}

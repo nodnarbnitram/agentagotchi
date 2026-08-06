@@ -21,7 +21,9 @@ import (
 	"time"
 )
 
-const DefaultPort = 8787
+// DefaultPort is the feed/admin WSS port. 8787 collides with wrangler and
+// other dev servers; 6571 = "A"65 "G"71 (Agentagotchi) in the registered range.
+const DefaultPort = 6571
 
 type Identity struct {
 	Token     string `json:"token"`

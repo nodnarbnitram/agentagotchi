@@ -5,7 +5,10 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 project_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 app_dir="$HOME/Library/Application Support/Agentagotchi"
 bin_dir="$app_dir/bin"
-plugin_dir="$HOME/plugins/agentagotchi-status"
+# Codex's personal marketplace resolves plugins from ~/.codex/personal/plugins/
+# and enumerates them via .agents/plugins/marketplace.json; both must be updated.
+plugin_dir="$HOME/.codex/personal/plugins/agentagotchi-status"
+marketplace_index="$HOME/.codex/personal/.agents/plugins/marketplace.json"
 launch_dir="$HOME/Library/LaunchAgents"
 launch_plist="$launch_dir/com.agentagotchi.edge.plist"
 codex_bin="${AGENTAGOTCHI_CODEX_BIN:-}"
@@ -41,6 +44,25 @@ mkdir -p "$bin_dir" "$plugin_dir" "$launch_dir"
 chmod 0700 "$app_dir" "$bin_dir"
 install -m 0755 "$build_dir/agentagotchi" "$bin_dir/agentagotchi"
 ditto "$project_dir/plugin/agentagotchi-status" "$plugin_dir"
+
+# Register the plugin in the personal marketplace index (idempotent).
+if [ -f "$marketplace_index" ]; then
+  python3 - "$marketplace_index" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+plugins = data.setdefault("plugins", [])
+if not any(p.get("name") == "agentagotchi-status" for p in plugins):
+    plugins.append({
+        "name": "agentagotchi-status",
+        "source": {"source": "local", "path": "./plugins/agentagotchi-status"},
+        "category": "Productivity",
+    })
+    json.dump(data, open(path, "w"), indent=2)
+PY
+else
+  echo "warning: $marketplace_index not found; plugin may not be discoverable" >&2
+fi
 sed -e "s|__APP_DIR__|$app_dir|g" -e "s|__CODEX_BIN__|$codex_bin|g" \
   "$project_dir/packaging/com.agentagotchi.edge.plist.in" > "$launch_plist"
 chmod 0644 "$launch_plist"
@@ -48,6 +70,12 @@ chmod 0644 "$launch_plist"
 launchctl bootout "gui/$(id -u)/com.agentagotchi.edge" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$launch_plist"
 launchctl kickstart -k "gui/$(id -u)/com.agentagotchi.edge"
+
+# The superseded single-harness prototype plugin, if present and enabled, fires
+# hooks at the retired codex-pet bridge. Disable it as part of migration.
+if "$codex_bin" plugin list 2>/dev/null | grep -q "codex-pet-status@personal"; then
+  "$codex_bin" plugin remove codex-pet-status@personal >/dev/null 2>&1 || true
+fi
 
 if ! "$codex_bin" plugin add agentagotchi-status@personal; then
   echo "The bridge is installed, but Codex did not enable agentagotchi-status@personal." >&2
