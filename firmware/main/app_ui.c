@@ -676,12 +676,48 @@ static void update_status_bar(void)
 
 static void pet_click_handler(lv_event_t *event)
 {
-    if (lv_event_get_code(event) != LV_EVENT_RELEASED || !s_ui.has_snapshot) {
+    if (!s_ui.has_snapshot) {
         return;
     }
     int index = featured_task_index();
-    if (index >= 0 && s_ui.snapshot.tasks[index].focus_capability) {
-        const app_task_t *task = &s_ui.snapshot.tasks[index];
+    if (index < 0) {
+        return;
+    }
+    const app_task_t *task = &s_ui.snapshot.tasks[index];
+    if (lv_event_get_code(event) == LV_EVENT_LONG_PRESSED) {
+        /* Pending physical validation: long-pressing the featured pet is the
+         * dismiss gesture for the featured task. Mirrors the task-tray row
+         * semantics: finished (ready/blocked) work is acknowledged, work
+         * awaiting input is snoozed. Dismissals are Edge-global controls:
+         * they do not require the task to advertise any host capability. */
+        if (task->state == APP_STATE_READY || task->state == APP_STATE_BLOCKED) {
+            snprintf(s_ui.dismissed_task_id, sizeof(s_ui.dismissed_task_id), "%s", task->id);
+            (void)app_network_request_dismiss(
+                task->id,
+                task->feed_slot,
+                task->origin_revision,
+                APP_DISMISS_ACKNOWLEDGE);
+        } else if (task->state == APP_STATE_NEEDS_INPUT) {
+            snprintf(s_ui.dismissed_task_id, sizeof(s_ui.dismissed_task_id), "%s", task->id);
+            (void)app_network_request_dismiss(
+                task->id,
+                task->feed_slot,
+                task->origin_revision,
+                APP_DISMISS_SNOOZE);
+        }
+        return;
+    }
+    if (lv_event_get_code(event) != LV_EVENT_RELEASED) {
+        return;
+    }
+    /* LVGL sends LV_EVENT_RELEASED after a long press too; the dismiss guard
+     * suppresses the tap-to-focus branch on the release that follows a
+     * pet long-press dismiss (same pattern as the task-tray rows). */
+    if (strcmp(s_ui.dismissed_task_id, task->id) == 0) {
+        s_ui.dismissed_task_id[0] = '\0';
+        return;
+    }
+    if (task->focus_capability) {
         (void)app_network_request_focus(
             task->id,
             task->feed_slot,
@@ -933,6 +969,7 @@ static void build_ui(void *argument)
     lv_obj_set_pos(s_ui.pet_canvas, 0, 96);
     lv_obj_add_flag(s_ui.pet_canvas, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_ui.pet_canvas, pet_click_handler, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(s_ui.pet_canvas, pet_click_handler, LV_EVENT_LONG_PRESSED, NULL);
 
     s_ui.speech_tail = lv_obj_create(screen);
     lv_obj_set_pos(s_ui.speech_tail, 116, 88);

@@ -40,10 +40,26 @@ GOCACHE="$build_dir/gocache" go test ./...
 GOCACHE="$build_dir/gocache" GOOS=darwin GOARCH=arm64 \
   go build -trimpath -o "$build_dir/agentagotchi" ./cmd/agentagotchi
 
-mkdir -p "$bin_dir" "$plugin_dir" "$launch_dir"
+mkdir -p "$bin_dir" "$plugin_dir" "$launch_dir" "$app_dir"
 chmod 0700 "$app_dir" "$bin_dir"
 install -m 0755 "$build_dir/agentagotchi" "$bin_dir/agentagotchi"
 ditto "$project_dir/plugin/agentagotchi-status" "$plugin_dir"
+
+# Build and install the optional macOS admin client (.app bundle).
+# The bundle is unsigned; usable as a local owner tool. For distribution
+# you would Xcode-sign and notarize it instead.
+if command -v swift >/dev/null 2>&1; then
+  echo "Building macos-admin app..."
+  admin_bundle="$build_dir/macos-admin"
+  "$project_dir/scripts/build-macos-admin-app.sh" "$admin_bundle" >/dev/null
+  install_dir="$app_dir/AgentagotchiAdmin.app"
+  rm -rf "$install_dir"
+  ditto "$admin_bundle/AgentagotchiAdmin.app" "$install_dir"
+  chmod -R u+rwX,go-rwx "$install_dir"
+  echo "Admin app installed: $install_dir"
+else
+  echo "warning: swift toolchain not found; skipping the optional macos-admin app" >&2
+fi
 
 # Register the plugin in the personal marketplace index (idempotent).
 if [ -f "$marketplace_index" ]; then
@@ -84,3 +100,4 @@ fi
 
 echo "Agentagotchi installed. Restart Codex so the hook plugin is reloaded."
 echo "Bridge log: $app_dir/bridge.log"
+echo "Admin app: $app_dir/AgentagotchiAdmin.app (open to launch)"

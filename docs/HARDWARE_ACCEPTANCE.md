@@ -84,6 +84,26 @@ Record results here from real-kit runs only — never from compilation.
 
 ---
 
+## Physical validation run — 2026-08-06 (pet long-press dismiss)
+
+Kit: ESP32-S3-BOX-3 (USB Serial/JTAG `/dev/cu.usbmodem2112301`), ESP-IDF v5.5.1,
+firmware commit `209e7c2` on branch `feat/pet-longpress-dismiss`, Edge v0.2.0
+on macOS (wss://brandons-macbook-pro-2.local:6571/feed/v1).
+
+Observed PASS (user-confirmed on kit):
+
+- **Long-pressing the featured pet dismisses its task.** With the pet
+  displaying a finished (`ready`) task, a pet long-press sends the
+  `acknowledge` dismissal and clears it from the device.
+
+Build/check context: `idf.py -C firmware build` warning-free (ESP-IDF v5.5.1),
+`make test` green (Go, sensor math, pet assets, release contracts, plugin).
+
+Not yet validated on kit: pet long-press for `needs_input` → `snooze`;
+tray-row long-press dismiss remains pending physical validation.
+
+---
+
 ## Physical validation run — 2026-08-06 (single feed, multi-feed slot provisioning pending)
 
 Kit: ESP32-S3-BOX-3 (USB Serial/JTAG `/dev/cu.usbmodem2112301`), ESP-IDF v5.5.1,

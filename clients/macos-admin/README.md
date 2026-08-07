@@ -6,6 +6,19 @@ Optional macOS 14+ SwiftUI administration client for the local Edge. The
 
 ## Build and run
 
+Build the `.app` bundle from the repo root:
+
+```sh
+make macos-admin   # work/macos-admin/AgentagotchiAdmin.app
+open work/macos-admin/AgentagotchiAdmin.app
+```
+
+The installer (`scripts/install-macos.sh`) also builds and installs this app
+under `~/Library/Application Support/Agentagotchi/AgentagotchiAdmin.app`
+when a Swift toolchain is present.
+
+For iteration during development:
+
 ```sh
 cd clients/macos-admin
 swift build
@@ -15,6 +28,10 @@ swift run AgentagotchiAdmin
 
 The package can also be opened as a Swift Package in Xcode 15 or newer. The
 app uses the same default socket as the Edge CLI:
+
+The bundle produced by `make macos-admin` is unsigned; it launches normally
+as a local owner tool, but you would need to Xcode-sign (and notarize) it
+before distributing it to others or to fully disable Gatekeeper prompts.
 
 ```text
 ~/Library/Application Support/Agentagotchi/edge.sock
