@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"agentagotchi.local/agentagotchi/internal/adapters/claude"
 	"agentagotchi.local/agentagotchi/internal/adapters/codex"
 	"agentagotchi.local/agentagotchi/internal/adapters/codex/appserver"
 	"agentagotchi.local/agentagotchi/internal/config"
@@ -79,6 +80,8 @@ type Service struct {
 	router           *Router
 	codexReducer     *codex.Reducer
 	codexLease       presence.Lease
+	claudeReducer    *claude.Reducer
+	claudeLease      presence.Lease
 	leaseDuration    time.Duration
 	authenticator    FeedAuthenticator
 	logger           *log.Logger
@@ -88,6 +91,8 @@ type Service struct {
 	seqMu            sync.Mutex
 	codexIngestMu    sync.Mutex
 	codexSeq         uint64
+	claudeIngestMu   sync.Mutex
+	claudeSeq        uint64
 	codexBinary      string
 	disableMDNS      bool
 	disableAppServer bool
@@ -115,6 +120,13 @@ func NewService(opts Options) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Claude Code has no addressable session-focus mechanism (no URL scheme;
+	// `claude --resume` spawns a new process), so it registers with zero
+	// capabilities. Per the fail-closed capability rule it is status-only.
+	claudeLease, err := core.AttachLocal("claude", nil)
+	if err != nil {
+		return nil, err
+	}
 	authenticator := opts.FeedAuthenticator
 	leaseDuration := opts.PresenceConfig.LeaseDuration
 	if leaseDuration <= 0 {
@@ -125,6 +137,7 @@ func NewService(opts Options) (*Service, error) {
 		version: Version, startedAt: time.Now().UTC(),
 		statePath: statePath, socketPath: filepath.Join(opts.DataDir, "edge.sock"),
 		core: core, codexReducer: codex.NewReducer(), codexLease: codexLease,
+		claudeReducer: claude.NewReducer(), claudeLease: claudeLease,
 		leaseDuration: leaseDuration, authenticator: authenticator,
 		logger: opts.Logger, hub: newFeedHub(), notify: make(chan struct{}, 1),
 		codexBinary: opts.CodexBinary, disableMDNS: opts.DisableMDNS,
@@ -253,6 +266,37 @@ func (s *Service) applyCodexHook(event contract.IPCHookEvent) {
 			afterGeneration, afterRevision := s.core.Revision()
 			changed = changed || beforeGeneration != afterGeneration || beforeRevision != afterRevision
 		}
+	}
+	if changed {
+		s.signal()
+	}
+}
+
+// applyClaudeHook ingests one sanitized Claude Code hook event. It mirrors
+// applyCodexHook but registers no focus capability (Claude Code has no
+// addressable session-focus mechanism) and consumes no App Server enrichment
+// (a Codex-only metadata source).
+func (s *Service) applyClaudeHook(event contract.IPCHookEvent) {
+	s.claudeIngestMu.Lock()
+	defer s.claudeIngestMu.Unlock()
+	report, end, applied := s.claudeReducer.Apply(event)
+	if !applied {
+		return
+	}
+	s.seqMu.Lock()
+	s.claudeSeq++
+	seq := s.claudeSeq
+	s.seqMu.Unlock()
+	var reports []presence.Report
+	var ends []string
+	if end {
+		ends = []string{event.NativeSessionID}
+	} else {
+		reports = []presence.Report{report}
+	}
+	changed, err := s.core.ApplyReports(s.claudeLease.ID, seq, reports, ends)
+	if err != nil {
+		return
 	}
 	if changed {
 		s.signal()

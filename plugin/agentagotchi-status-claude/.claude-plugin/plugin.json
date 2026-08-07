@@ -1,0 +1,15 @@
+{
+  "name": "agentagotchi-status-claude",
+  "version": "0.1.0",
+  "description": "Sends privacy-filtered Claude Code lifecycle status to the local Agentagotchi bridge.",
+  "author": {
+    "name": "Brandon"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "status",
+    "esp32",
+    "local"
+  ]
+}

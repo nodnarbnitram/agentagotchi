@@ -15,8 +15,10 @@ import (
 	"syscall"
 	"time"
 
+	"agentagotchi.local/agentagotchi/internal/adapters/claude"
 	"agentagotchi.local/agentagotchi/internal/adapters/codex"
 	"agentagotchi.local/agentagotchi/internal/config"
+	"agentagotchi.local/agentagotchi/internal/contract"
 	"agentagotchi.local/agentagotchi/internal/edge"
 	"agentagotchi.local/agentagotchi/internal/pairing"
 	"agentagotchi.local/agentagotchi/internal/provision"
@@ -89,17 +91,27 @@ func runHook(args []string) error {
 	fs := flag.NewFlagSet("hook", flag.ContinueOnError)
 	dataDir := fs.String("data-dir", config.DefaultDataDir(), "bridge data directory")
 	socket := fs.String("socket", "", "override bridge Unix socket")
+	harness := fs.String("harness", "codex", "harness emitting the hook: codex|claude")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	// Codex Stop/SubagentStop hooks require JSON stdout on success. An empty
-	// object is valid for every event and never alters Codex behavior.
+	// Stop/SubagentStop hooks require JSON stdout on success. An empty object
+	// is valid for every event and never alters harness behavior.
 	defer func() {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{})
 	}()
-	event, err := codex.Sanitize(os.Stdin, time.Now())
+	var event contract.IPCHookEvent
+	var err error
+	switch *harness {
+	case "codex":
+		event, err = codex.Sanitize(os.Stdin, time.Now())
+	case "claude":
+		event, err = claude.Sanitize(os.Stdin, time.Now())
+	default:
+		return fmt.Errorf("unknown harness %q (want codex|claude)", *harness)
+	}
 	if err != nil {
-		return nil // Hook telemetry is best-effort and must never disrupt Codex.
+		return nil // Hook telemetry is best-effort and must never disrupt the harness.
 	}
 	if *socket == "" {
 		*socket = filepath.Join(*dataDir, "edge.sock")
@@ -151,7 +163,7 @@ func usage() {
 Commands:
   serve       Run the Edge Bridge
   status      Show Edge status (connectivity, pairings, Task Presence counts)
-  hook        Receive one Codex hook event from stdin
+  hook        Receive one harness hook event from stdin (--harness codex|claude)
   pair        Manage the Pairing Ceremony (begin/approve/deny/pending/list/revoke)
   provision   Build, flash, and provision the BOX-3
   version     Print the Edge version`)

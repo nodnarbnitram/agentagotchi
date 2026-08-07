@@ -125,11 +125,17 @@ func (s *Service) handleIPCConnection(conn net.Conn) {
 	case "hook_event":
 		var event contract.IPCHookEvent
 		if err := contract.DecodeStrict(frame, contract.SchemaIPCV1, &event); err != nil ||
-			event.Type != "hook_event" || event.Harness != "codex" || event.EventID == "" ||
+			event.Type != "hook_event" || event.EventID == "" ||
 			event.NativeSessionID == "" || event.Event == "" {
 			return
 		}
-		s.applyCodexHook(event)
+		// Route by validated harness. Fail closed on any unknown harness.
+		switch event.Harness {
+		case "codex":
+			s.applyCodexHook(event)
+		case "claude":
+			s.applyClaudeHook(event)
+		}
 	case "adapter_hello":
 		var hello contract.IPCAdapterHello
 		if err := contract.DecodeStrict(frame, contract.SchemaIPCV1, &hello); err != nil ||

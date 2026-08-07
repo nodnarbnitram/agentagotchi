@@ -98,6 +98,19 @@ if ! "$codex_bin" plugin add agentagotchi-status@personal; then
   exit 1
 fi
 
+# Optional: Claude Code status plugin (status-only, no focus; see
+# docs/adr/0008). Skipped cleanly when the Claude Code CLI is absent, so the
+# Codex-only install path is unchanged.
+claude_plugin_dir="$HOME/.claude/agentagotchi/plugins/agentagotchi-status-claude"
+if command -v claude >/dev/null 2>&1; then
+  mkdir -p "$(dirname "$claude_plugin_dir")"
+  ditto "$project_dir/plugin/agentagotchi-status-claude" "$claude_plugin_dir"
+  echo "Claude Code plugin installed at $claude_plugin_dir"
+  echo "Enable it with: claude --plugin-dir \"$claude_plugin_dir\" (dev) or add to a marketplace."
+else
+  echo "Claude Code CLI not found; skipping the optional Claude status plugin." >&2
+fi
+
 echo "Agentagotchi installed. Restart Codex so the hook plugin is reloaded."
 echo "Bridge log: $app_dir/bridge.log"
 echo "Admin app: $app_dir/AgentagotchiAdmin.app (open to launch)"

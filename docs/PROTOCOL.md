@@ -84,7 +84,11 @@ is ever logged.
 Two modes share one frame format (newline-delimited JSON, max frame 64 KiB,
 strict field decoding — unknown fields reject the frame):
 
-**One-shot mode** (Codex hooks): connect, send one `hook_event`, close.
+**One-shot mode** (harness lifecycle hooks — Codex and Claude Code):
+connect, send one `hook_event`, close. The `harness` field selects the
+per-harness reducer (`codex` or `claude`); unknown harnesses fail closed.
+Claude Code attaches with zero capabilities and is status-only
+(`docs/adr/0008`).
 
 **Leased session mode** (persistent adapters such as Pi): connect, send
 `adapter_hello`, then stream absolute `presence_report` messages. The Edge
